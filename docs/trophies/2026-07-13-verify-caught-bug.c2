@@ -1,6 +1,21 @@
-// swap_bytes.c2 — Example C² program demonstrating contracts, derivation, and borrow checking.
+// 🏆 Trophy: First bug caught by `c2c verify`
 //
-// 2026-07-13 — Initial example.
+// Date: 2026-07-13
+// Bug: integer promotion caused `int32_t swap_bytes(uint16_t val)` to return
+//      a value wider than 16 bits for the 0x1234 → 0x3412 derivation.
+//
+//      `val << 8` promotes the uint16_t to int (32-bit), yielding 0x123400,
+//      then `| val >> 8` gives 0x123412 instead of the expected 0x3412.
+//
+// The verify command caught this mismatch between the derivation spec
+// and the actual function behavior:
+//
+//   FAIL: swap_bytes(4660) expected 13330, got 1192978
+//   PASS: swap_bytes(255) == 65280
+//   PASS: swap_bytes(0) == 0
+//
+// Fix: changed return type from int32_t to uint16_t so the result is
+// correctly truncated to 16 bits.
 
 #include "c2.h"
 #include <stdio.h>
@@ -21,14 +36,13 @@ int32_t abs_value(int32_t x) {
 // ── Precondition only (double-close = no post) ──────────────────────────
 [x >= 0 && x < 100]]
 void set_index(int32_t x) {
-    // Compiler proves x is in-bounds for a 100-element array
     int32_t arr[100];
     arr[x] = 42;
 }
 
-// ── Derivation block: compile-time assertion ────────────────────────────
-// Derivation examples serve as the specification, so no separate contract needed.
-uint16_t swap_bytes(uint16_t val) {
+// ── BUGGY VERSION: swapped bytes but returned int32_t without masking ──
+//    0x1234 -> expected 0x3412, got 0x123412
+int32_t swap_bytes(uint16_t val) {
     return (val << 8) | (val >> 8);
 } := {
     0x1234 -> 0x3412;
