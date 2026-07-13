@@ -11,8 +11,9 @@
 SHELL := /bin/bash
 CC    := gcc
 CFLAGS := -std=c23 -Wall -Wextra -Wpedantic -Werror -g -O0
-# Z3 is optional for Phase A (verification pass linked in Phase C)
-# Try to detect Z3; if not found, link without it.
+# Z3 SMT solver for contract verification (Phase C)
+# If not found, verification is skipped at runtime.
+Z3_CFLAGS := $(shell pkg-config --cflags z3 2>/dev/null || echo "")
 Z3_LDFLAGS := $(shell pkg-config --libs z3 2>/dev/null || echo "")
 LDFLAGS := $(Z3_LDFLAGS)
 
@@ -51,7 +52,7 @@ $(TARGET): $(OBJS)
 # Compile each source file
 $(BUILD_DIR)/%.o: $(SRC_DIR)/%.c
 	@echo "Compiling $<..."
-	@$(CC) $(CFLAGS) -MMD -MP -Iinclude -c $< -o $@
+	@$(CC) $(CFLAGS) $(Z3_CFLAGS) -MMD -MP -Iinclude -c $< -o $@
 
 # Include auto-generated dependency files
 -include $(DEPS)

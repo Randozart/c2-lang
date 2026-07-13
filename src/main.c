@@ -11,6 +11,7 @@
 #include "codegen.h"
 #include "typecheck.h"
 #include "verify.h"
+#include "verifier.h"
 #include "error.h"
 
 // ── Forward declarations ────────────────────────────────────────────────
@@ -127,6 +128,9 @@ int main(int argc, char** argv) {
             return 1;
         }
 
+        // Z3 contract verification
+        z3_verify_contracts(ast, errors, 0);
+
         // Driver mode: invoke system C compiler
         if (!emit_c_only) {
             int comp_result = compile_c_file(c_path, output_path);
@@ -166,6 +170,9 @@ int main(int argc, char** argv) {
             errlist_destroy(errors);
             return 3;
         }
+
+        // Z3 contract verification
+        z3_verify_contracts(ast, errors, 1);
 
         printf("c2: check passed for '%s'\n", input_file);
         ast_free_tree(ast);
