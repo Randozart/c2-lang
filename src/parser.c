@@ -543,9 +543,21 @@ static AstNode* parse_derivation_block(Parser* p) {
             break;
         }
 
+        // Optional tolerance: [tolerance] output
+        AstNode* tolerance_node = NULL;
+        if (match(p, TOK_LBRACK)) {
+            AstNode* tol_expr = parse_expr(p);
+            expect(p, TOK_RBRACK);
+            if (tol_expr) {
+                tolerance_node = ast_alloc_node(NODE_DERIV_TOLERANCE, tol_expr->token);
+                ast_add_child(tolerance_node, tol_expr);
+            }
+        }
+
         // Output expression
         AstNode* output = parse_expr(p);
         if (output) ast_add_child(example, output);
+        if (tolerance_node) ast_add_child(example, tolerance_node);
 
         // Semicolon separator
         if (!match(p, TOK_SEMI)) {

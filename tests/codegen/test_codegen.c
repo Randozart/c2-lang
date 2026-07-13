@@ -196,6 +196,20 @@ static void test_emit_derivation(void) {
     PASS();
 }
 
+static void test_emit_derivation_tolerance(void) {
+    TEST("emit derivation with tolerance");
+    ErrorList* err = errlist_create();
+    const char* src = "[1][1]\n"
+                      "float f(float x) := {\n"
+                      "    1.0 -> [0.01] 2.0;\n"
+                      "};\n";
+    const char* out = transpile(src, err);
+    assert(out != NULL);
+    assert(strstr(out, "[tol=0.01]") != NULL);
+    errlist_destroy(err);
+    PASS();
+}
+
 static void test_emit_preprocessor(void) {
     TEST("emit #include directive");
     ErrorList* err = errlist_create();
@@ -320,6 +334,7 @@ int main(void) {
     test_emit_for();
     test_emit_pointer();
     test_emit_derivation();
+    test_emit_derivation_tolerance();
     test_emit_preprocessor();
     test_emit_string();
     test_emit_struct();

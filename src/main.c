@@ -105,7 +105,7 @@ int main(int argc, char** argv) {
 
         // Verify derivation examples as a build gate
         int vresult = verify_source(source, source_len, input_file, errors, 0);
-        if (vresult == 1) {
+        if (vresult > 0) {
             fprintf(stderr, "error: derivation verification failed for '%s'\n", input_file);
             fprintf(stderr, "  Re-run `c2c verify %s` for full details.\n", input_file);
             ast_free_tree(ast);
@@ -149,7 +149,7 @@ int main(int argc, char** argv) {
         free(source);
         errlist_destroy(errors);
         if (vresult < 0) return 2;
-        if (vresult == 1) {
+        if (vresult > 0) {
             fprintf(stderr, "c2: verification FAILED\n");
             return 1;
         }

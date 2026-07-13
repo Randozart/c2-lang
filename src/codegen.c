@@ -418,30 +418,53 @@ static void emit_node(Codegen* cg, AstNode* node) {
             // Emit derivation examples as comments
             for (size_t i = 0; i < node->child_count; i++) {
                 AstNode* example = node->children[i];
-                if (example->kind == NODE_DERIV_EXAMPLE) {
-                    cg_puts(cg, "// Derivation example: ");
-                    // Find the arrow position (last child is output)
-                    size_t input_count = example->child_count > 0 ? example->child_count - 1 : 0;
-                    for (size_t j = 0; j < input_count; j++) {
-                        if (j > 0) cg_puts(cg, ", ");
-                        // For literals, print value
-                        if (example->children[j]->kind == NODE_LITERAL_INT) {
-                            cg_printf(cg, "%" PRId64, example->children[j]->token.value.i64);
-                        } else {
-                            cg_puts(cg, "expr");
-                        }
-                    }
-                    cg_puts(cg, " -> ");
-                    if (input_count < example->child_count) {
-                        AstNode* out = example->children[input_count];
-                        if (out->kind == NODE_LITERAL_INT) {
-                            cg_printf(cg, "%" PRId64, out->token.value.i64);
-                        } else {
-                            cg_puts(cg, "expr");
-                        }
-                    }
-                    cg_putc(cg, '\n');
+                if (example->kind != NODE_DERIV_EXAMPLE) continue;
+
+                // Determine output index (account for optional tolerance wrapper)
+                size_t last = example->child_count;
+                size_t output_idx = last > 0 ? last - 1 : 0;
+                AstNode* tol = NULL;
+                if (last > 0 && example->children[last - 1]->kind == NODE_DERIV_TOLERANCE) {
+                    output_idx = last > 1 ? last - 2 : 0;
+                    if (example->children[last - 1]->child_count > 0)
+                        tol = example->children[last - 1]->children[0];
                 }
+
+                cg_puts(cg, "// Derivation example: ");
+                for (size_t j = 0; j < output_idx; j++) {
+                    if (j > 0) cg_puts(cg, ", ");
+                    AstNode* in = example->children[j];
+                    if (in->kind == NODE_LITERAL_INT) {
+                        cg_printf(cg, "%" PRId64, in->token.value.i64);
+                    } else if (in->kind == NODE_LITERAL_FLOAT) {
+                        cg_printf(cg, "%g", in->token.value.f64);
+                    } else {
+                        cg_puts(cg, "expr");
+                    }
+                }
+                cg_puts(cg, " -> ");
+                if (output_idx < last) {
+                    AstNode* out = example->children[output_idx];
+                    if (out->kind == NODE_LITERAL_INT) {
+                        cg_printf(cg, "%" PRId64, out->token.value.i64);
+                    } else if (out->kind == NODE_LITERAL_FLOAT) {
+                        cg_printf(cg, "%g", out->token.value.f64);
+                    } else {
+                        cg_puts(cg, "expr");
+                    }
+                }
+                if (tol) {
+                    cg_puts(cg, " [tol=");
+                    if (tol->kind == NODE_LITERAL_FLOAT) {
+                        cg_printf(cg, "%g", tol->token.value.f64);
+                    } else if (tol->kind == NODE_LITERAL_INT) {
+                        cg_printf(cg, "%" PRId64, tol->token.value.i64);
+                    } else {
+                        cg_puts(cg, "expr");
+                    }
+                    cg_putc(cg, ']');
+                }
+                cg_putc(cg, '\n');
             }
             break;
         }

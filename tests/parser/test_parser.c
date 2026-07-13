@@ -238,6 +238,41 @@ static void test_derivation_block(void) {
     PASS();
 }
 
+static void test_derivation_tolerance(void) {
+    TEST("parse derivation with tolerance");
+    ErrorList* err = errlist_create();
+    const char* src = "[1][1]\n"
+                      "float f(float x) := {\n"
+                      "    1.0 -> [0.01] 2.0;\n"
+                      "    0.0 -> [0.1] 0.5;\n"
+                      "};\n";
+    AstNode* root = parse_source(src, err);
+    assert(root != NULL && root->child_count == 1);
+    AstNode* func = root->children[0];
+    assert(func->kind == NODE_FUNCTION);
+    // Find derivation block
+    AstNode* deriv = NULL;
+    for (size_t i = 0; i < func->child_count; i++) {
+        if (func->children[i]->kind == NODE_DERIVATION) { deriv = func->children[i]; break; }
+    }
+    assert(deriv != NULL);
+    assert(deriv->child_count == 2);
+    // Each example should have: [input, output, tolerance_node]
+    for (size_t i = 0; i < deriv->child_count; i++) {
+        AstNode* ex = deriv->children[i];
+        assert(ex->kind == NODE_DERIV_EXAMPLE);
+        assert(ex->child_count == 3);
+        assert(ex->children[0]->kind == NODE_LITERAL_FLOAT);  // input
+        assert(ex->children[1]->kind == NODE_LITERAL_FLOAT);  // output
+        assert(ex->children[2]->kind == NODE_DERIV_TOLERANCE); // tolerance wrapper
+        assert(ex->children[2]->child_count == 1);
+        assert(ex->children[2]->children[0]->kind == NODE_LITERAL_FLOAT); // tolerance value
+    }
+    ast_free_tree(root);
+    errlist_destroy(err);
+    PASS();
+}
+
 static void test_no_derive(void) {
     TEST("parse no_derive function");
     ErrorList* err = errlist_create();
@@ -492,6 +527,7 @@ int main(void) {
     test_while_statement();
     test_for_statement();
     test_derivation_block();
+    test_derivation_tolerance();
     test_no_derive();
     test_expressions();
     test_pointer_type();
