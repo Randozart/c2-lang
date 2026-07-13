@@ -15,7 +15,7 @@ CFLAGS := -std=c23 -Wall -Wextra -Wpedantic -Werror -g -O0
 # If not found, verification is skipped at runtime.
 Z3_CFLAGS := $(shell pkg-config --cflags z3 2>/dev/null || echo "")
 Z3_LDFLAGS := $(shell pkg-config --libs z3 2>/dev/null || echo "")
-LDFLAGS := $(Z3_LDFLAGS)
+LDFLAGS := $(Z3_LDFLAGS) -lm
 
 SRC_DIR := src
 BUILD_DIR := build

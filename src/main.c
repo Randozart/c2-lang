@@ -13,6 +13,7 @@
 #include "vrp.h"
 #include "borrow.h"
 #include "drop.h"
+#include "derive.h"
 #include "verify.h"
 #include "verifier.h"
 #include "error.h"
@@ -216,7 +217,35 @@ int main(int argc, char** argv) {
         }
         return 0;
     } else if (strcmp(command, "derive") == 0) {
-        printf("c2: derive mode for '%s' (not yet implemented, Phase F)\n", input_file);
+        // Parse
+        Parser parser = parser_create(source, source_len, input_file, errors);
+        AstNode* ast = parser_parse(&parser);
+        if (errors->has_errors) {
+            errlist_print(errors);
+            ast_free_tree(ast);
+            free(source);
+            errlist_destroy(errors);
+            return 2;
+        }
+        // Type-check (need types for derivation examples)
+        typecheck_ast(ast, errors, NULL);
+        if (errors->has_errors) {
+            errlist_print(errors);
+            ast_free_tree(ast);
+            free(source);
+            errlist_destroy(errors);
+            return 2;
+        }
+        // Run synthesis engine
+        int r = derive_synthesize(ast, input_file, errors, 1);
+        ast_free_tree(ast);
+        if (r != 0) {
+            fprintf(stderr, "c2: derivation synthesis FAILED\n");
+            free(source);
+            errlist_destroy(errors);
+            return 1;
+        }
+        printf("c2: derivation synthesis complete for '%s'\n", input_file);
     } else {
         fprintf(stderr, "error: unknown command '%s'\n", command);
         print_usage(argv[0]);
