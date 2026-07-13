@@ -13,16 +13,20 @@ Build a C-to-C semantic transpiler (Contract Enforced C) that extends standard C
 - **Verification engine:** Z3 SMT solver via `z3.h` C API
 - **Contract syntax:** `[pre][post]`, `[[post]` (double-open = no pre), `[pre]]` (double-close = no post)
 - **Derivation:** `:= { input -> output; }` block — assertion when body present, synthesis spec when body absent
-- **Memory management:** 5-state lexical variable state machine (`UNINITIALIZED → OWNED → BORROWED/MOVED → DROPPED`)
+- **Memory management:** 6-state lexical variable state machine (`UNINITIALIZED → OWNED → BORROWED/MOVED → DROPPED`; early `free(ptr)` transitions OWNED→DROPPED, skips drop injection)
+- **Early free suppression:** `free(ptr)` on an owned variable transitions it to `STATE_DROPPED`; the drop injection pass skips variables already DROPPED. This allows manual early-free while preventing double-free and use-after-free at compile time.
+- **Struct field free:** User must null-check in drop function and set field to NULL after early `free(vec->data)`. Field-level tracking is a future enhancement.
 - **Build modes:** Driver mode (transpile + compile) by default; `--emit-c` for transpile-only
 
 ### Work State
-- Specification document (`docs/spec.md`) is complete
-- Project scaffolding is in place (`src/`, `include/`, `tests/`, `examples/`)
-- First implementation phase (recursive-descent parser) has not started
+- Specification (`docs/spec.md`) updated through §5.6 (early free, struct field interaction)
+- Architecture doc (`docs/architecture/2026-07-13-1415-early-free-drop-suppression.md`) written
+- Project scaffolding in place (`src/`, `include/`, `tests/`, `examples/`)
+- Phase A (lexer, parser, AST, codegen) implemented; bugs fixed, output compiles with gcc
+- Plan file at `docs/plans/2026-07-13-1200-phase-a-parser.md`
 
 ### Next Move
-Begin Phase A: Implement the recursive-descent parser, AST definitions, and C code generator.
+Add unit tests for lexer, parser, and codegen; then fill remaining parser gaps (struct/enum/union, if/while/for).
 
 ---
 

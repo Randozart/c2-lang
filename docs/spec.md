@@ -514,6 +514,10 @@ typedef enum {
 | Scope ends (drop injected) | `OWNED → DROPPED` | Type has `drop` attribute |
 | Scope ends (var already moved) | No action | Prevents double-free |
 | Use after move | **Compiler error** | — |
+| User calls `free(ptr)` | `OWNED → DROPPED` | `borrow_count == 0` |
+| User calls `free(ptr)` on moved var | **Compiler error** | Already moved |
+| User calls `free(ptr)` again | **Compiler error** | Already `DROPPED` |
+| Use after `free()` | **Compiler error** | Already `DROPPED` |
 
 ### 5.3 Automatic Drop Injection
 
@@ -522,6 +526,33 @@ When the compiler reaches a closing `}`, it:
 1. Iterates all symbols in the current scope.
 2. Selects those with `state == STATE_OWNED` whose type implements `[[c2::drop(cleanup_fn)]]`.
 3. Injects `cleanup_fn(&var);` before the closing `}` in the AST.
+
+Variables already in `STATE_DROPPED` (because the user called `free()` early) are skipped — no double-free.
+
+#### 5.3.1 Early `free()` Suppression
+
+A manually written `free(ptr)` call causes the borrow checker to transition the owning variable to `STATE_DROPPED`. The drop injection pass then skips it:
+
+```c
+// C² source
+void example(void) {
+    int32_t* buf = malloc(100);
+    // ... use buf ...
+    free(buf);          // ← early free: buf → DROPPED
+    // ... more work without buf ...
+};                      // ← no drop injected for buf (already freed)
+
+// Emitted C
+void example(void) {
+    int32_t* buf = malloc(100);
+    // ... use buf ...
+    free(buf);
+    // ... more work without buf ...
+    // ← no free(buf) here — compiler recognized the early free
+}
+```
+
+The parser recognizes `free(expr)` calls and emits a `NODE_FREE` AST node. The borrow checker handles this node as a state transition (see §5.2).
 
 ```c
 // C² source
@@ -544,6 +575,34 @@ void example(void) {
 - A borrow's lifetime is lexical — it lasts until the end of the expression or scope where the borrow was taken.
 - While a borrow is active (`STATE_BORROWED`), the compiler rejects any write, move, or drop of the borrowed variable.
 - The borrow checker does **not** prevent data races across threads. Thread safety is a future extension.
+
+### 5.6 Struct Field Interaction
+
+When calling `free(vec->data)` on a struct member, the borrow checker does NOT transition the parent `vec` to `DROPPED`. Instead, the compiler relies on the struct's drop function to be null-safe:
+
+```c
+[[c2::drop(free_vector)]]
+typedef struct {
+    int32_t* data;
+    int32_t size;
+} Vector;
+
+void free_vector(Vector* vec) {
+    if (vec->data) {          // ← null check is required
+        free(vec->data);
+        vec->data = NULL;
+    }
+}
+
+void example(void) {
+    Vector vec = { malloc(10 * sizeof(int32_t)), 10 };
+    free(vec->data);
+    vec->data = NULL;          // ← required to prevent double-free
+    // vec is dropped here — free_vector(&vec) called, null check passes
+}
+```
+
+If the user frees a struct member early without setting it to NULL, the drop function will double-free. This is a documented responsibility of the programmer; field-level tracking is a planned future enhancement (see `docs/architecture/2026-07-13-1415-early-free-drop-suppression.md`).
 
 ### 5.5 Move Semantics
 
