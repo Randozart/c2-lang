@@ -28,7 +28,7 @@ static AstNode* parse_and_typecheck(const char* c2src, ErrorList* err) {
     Parser parser = parser_create(c2src, strlen(c2src), "<test>", err);
     AstNode* ast = parser_parse(&parser);
     if (err->has_errors) return NULL;
-    typecheck_ast(ast, err);
+    typecheck_ast(ast, err, NULL);
     if (err->has_errors) return NULL;
     return ast;
 }

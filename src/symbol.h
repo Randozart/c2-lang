@@ -33,6 +33,9 @@ struct Symbol {
     // Scope depth (for diagnostics)
     size_t         scope_depth;
 
+    // Inferred value range (populated by VRP pass)
+    ValueRange     range;
+
     // Linked list chain (for the scope's hash table bucket)
     Symbol*        next;
 };

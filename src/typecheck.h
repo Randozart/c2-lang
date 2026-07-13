@@ -12,7 +12,9 @@
 /// Run the type checker on a fully parsed AST.
 /// Populates node->type for all expression nodes.
 /// Reports errors via the ErrorList.
+/// If out_symtab is non-NULL, sets *out_symtab to the created symbol table
+/// (caller must destroy it with symtab_destroy).
 /// Returns 0 on success (no type errors), 1 on type errors.
-int typecheck_ast(AstNode* root, ErrorList* errors);
+int typecheck_ast(AstNode* root, ErrorList* errors, SymbolTable** out_symtab);
 
 #endif // C2_TYPECHECK_H

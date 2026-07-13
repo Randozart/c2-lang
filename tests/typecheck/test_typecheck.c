@@ -31,7 +31,7 @@ static const char* transpile(const char* src, ErrorList* err) {
     AstNode* ast = parser_parse(&parser);
     if (err->has_errors) return NULL;
 
-    typecheck_ast(ast, err);
+    typecheck_ast(ast, err, NULL);
     if (err->has_errors) return NULL;
 
     Codegen cg;

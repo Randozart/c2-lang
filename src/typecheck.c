@@ -1025,7 +1025,7 @@ static void tc_node(AstNode* node, TCContext* ctx) {
 
 // ── Public API ───────────────────────────────────────────────────────────
 
-int typecheck_ast(AstNode* root, ErrorList* errors) {
+int typecheck_ast(AstNode* root, ErrorList* errors, SymbolTable** out_symtab) {
     if (!root || !errors) return 1;
 
     TCContext ctx;
@@ -1038,6 +1038,10 @@ int typecheck_ast(AstNode* root, ErrorList* errors) {
 
     tc_node(root, &ctx);
 
-    symtab_destroy(ctx.symtab);
+    if (out_symtab) {
+        *out_symtab = ctx.symtab;
+    } else {
+        symtab_destroy(ctx.symtab);
+    }
     return ctx.has_type_error ? 1 : 0;
 }

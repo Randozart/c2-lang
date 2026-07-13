@@ -10,6 +10,7 @@
 #include "parser.h"
 #include "codegen.h"
 #include "typecheck.h"
+#include "vrp.h"
 #include "verify.h"
 #include "verifier.h"
 #include "error.h"
@@ -75,16 +76,22 @@ int main(int argc, char** argv) {
         }
 
         // Type-check
-        int tc_errors = typecheck_ast(ast, errors);
+        SymbolTable* symtab = NULL;
+        int tc_errors = typecheck_ast(ast, errors, &symtab);
         if (errors->has_errors) {
             errlist_print(errors);
         }
         if (tc_errors) {
+            symtab_destroy(symtab);
             ast_free_tree(ast);
             free(source);
             errlist_destroy(errors);
             return 3;
         }
+
+        // Value Range Propagation
+        vrp_run(ast, symtab, errors);
+        symtab_destroy(symtab);
 
         // Codegen
         Codegen cg;
@@ -160,16 +167,22 @@ int main(int argc, char** argv) {
         }
 
         // Type-check
-        int tc_errors = typecheck_ast(ast, errors);
+        SymbolTable* symtab = NULL;
+        int tc_errors = typecheck_ast(ast, errors, &symtab);
         if (errors->has_errors) {
             errlist_print(errors);
         }
         if (tc_errors) {
+            symtab_destroy(symtab);
             ast_free_tree(ast);
             free(source);
             errlist_destroy(errors);
             return 3;
         }
+
+        // Value Range Propagation
+        vrp_run(ast, symtab, errors);
+        symtab_destroy(symtab);
 
         // Z3 contract verification
         z3_verify_contracts(ast, errors, 1);
