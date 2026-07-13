@@ -26,7 +26,7 @@ Build a C-to-C semantic transpiler (Contract Enforced C) that extends standard C
 - Plan file at `docs/plans/2026-07-13-1200-phase-a-parser.md`
 
 ### Next Move
-Add unit tests for lexer, parser, and codegen; then fill remaining parser gaps (struct/enum/union, if/while/for).
+Implement `do-while` parsing + codegen to complete all C23 loop constructs; then begin Phase B (type checker).
 
 ---
 
@@ -251,15 +251,16 @@ CLI entry point. Parses command-line flags and dispatches to the appropriate pip
 
 | Phase | Module | Status |
 |-------|--------|--------|
-| A | Lexer | Not started |
-| A | Parser | Not started |
-| A | AST | Not started |
-| A | Codegen (basic) | Not started |
+| A | Lexer | Complete (58 tests) |
+| A | Parser | Complete (30 tests) — all C23 + C² syntax |
+| A | AST | Complete — all node types defined |
+| A | Codegen | Complete (17 tests) — emits valid C |
+| A | Verify | Complete — built-in derivation unit tester |
 | B | Type checker | Not started |
 | C | Z3 verifier | Not started |
 | D | VRP | Not started |
 | E | Borrow checker | Not started |
 | E | Drop injection | Not started |
-| F | Derivation/synthesis | Not started |
+| F | Derivation/synthesis | Not started (CLI stub exists) |
 | G | Optimizing codegen | Not started |
 | H | Self-hosting | Not started |

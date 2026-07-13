@@ -9,6 +9,7 @@
 #include "lexer.h"
 #include "parser.h"
 #include "codegen.h"
+#include "verify.h"
 #include "error.h"
 
 // ── Forward declarations ────────────────────────────────────────────────
@@ -58,12 +59,11 @@ int main(int argc, char** argv) {
     // Create error list
     ErrorList* errors = errlist_create();
 
-    if (strcmp(command, "build") == 0 || strcmp(command, "check") == 0) {
+    if (strcmp(command, "build") == 0) {
         // Parse
         Parser parser = parser_create(source, source_len, input_file, errors);
         AstNode* ast = parser_parse(&parser);
 
-        // Print errors if any
         if (errors->has_errors) {
             errlist_print(errors);
             ast_free_tree(ast);
@@ -72,60 +72,88 @@ int main(int argc, char** argv) {
             return 2;
         }
 
-        if (strcmp(command, "build") == 0) {
-            // Codegen
-            Codegen cg;
-            codegen_init(&cg, errors);
-            codegen_generate(&cg, ast);
+        // Codegen
+        Codegen cg;
+        codegen_init(&cg, errors);
+        codegen_generate(&cg, ast);
 
-            if (errors->has_errors) {
-                errlist_print(errors);
-                codegen_free(&cg);
+        if (errors->has_errors) {
+            errlist_print(errors);
+            codegen_free(&cg);
+            ast_free_tree(ast);
+            free(source);
+            errlist_destroy(errors);
+            return 2;
+        }
+
+        // Determine output C path
+        char c_path[4096];
+        const char* base_name = input_file;
+        const char* slash = strrchr(input_file, '/');
+        if (slash) base_name = slash + 1;
+        slash = strrchr(input_file, '\\');
+        if (slash && slash > base_name - 1) base_name = slash + 1;
+
+        mkdir("_c2_out", 0755);
+
+        snprintf(c_path, sizeof(c_path), "_c2_out/%.*s.c",
+                 (int)(strlen(base_name) - (strstr(base_name, ".c2") ? 3 : 0)),
+                 base_name);
+
+        codegen_write_file(&cg, c_path);
+        codegen_free(&cg);
+
+        // Verify derivation examples as a build gate
+        int vresult = verify_source(source, source_len, input_file, errors, 0);
+        if (vresult == 1) {
+            fprintf(stderr, "error: derivation verification failed for '%s'\n", input_file);
+            fprintf(stderr, "  Re-run `c2c verify %s` for full details.\n", input_file);
+            ast_free_tree(ast);
+            free(source);
+            errlist_destroy(errors);
+            return 1;
+        }
+
+        // Driver mode: invoke system C compiler
+        if (!emit_c_only) {
+            int comp_result = compile_c_file(c_path, output_path);
+            if (comp_result != 0) {
+                fprintf(stderr, "c2: system compiler invocation failed\n");
                 ast_free_tree(ast);
                 free(source);
                 errlist_destroy(errors);
-                return 2;
+                return 6;
             }
-
-            // Determine output C path
-            char c_path[4096];
-            const char* base_name = input_file;
-            const char* slash = strrchr(input_file, '/');
-            if (slash) base_name = slash + 1;
-            slash = strrchr(input_file, '\\');
-            if (slash && slash > base_name - 1) base_name = slash + 1;
-
-            // Create output directory
-            mkdir("_c2_out", 0755);
-
-            snprintf(c_path, sizeof(c_path), "_c2_out/%.*s.c",
-                     (int)(strlen(base_name) - (strstr(base_name, ".c2") ? 3 : 0)),
-                     base_name);
-
-            codegen_write_file(&cg, c_path);
-
-            if (emit_c_only) {
-                printf("c2: emitted '%s'\n", c_path);
-            } else {
-                // Driver mode: invoke system C compiler
-                int result = compile_c_file(c_path, output_path);
-                if (result != 0) {
-                    fprintf(stderr, "c2: system compiler invocation failed\n");
-                    codegen_free(&cg);
-                    ast_free_tree(ast);
-                    free(source);
-                    errlist_destroy(errors);
-                    return 6;
-                }
-                printf("c2: built '%s' -> '%s'\n", input_file, output_path);
-            }
-
-            codegen_free(&cg);
+            printf("c2: built '%s' -> '%s'\n", input_file, output_path);
         } else {
-            printf("c2: check passed for '%s'\n", input_file);
+            printf("c2: emitted '%s'\n", c_path);
         }
 
         ast_free_tree(ast);
+    } else if (strcmp(command, "check") == 0) {
+        Parser parser = parser_create(source, source_len, input_file, errors);
+        AstNode* ast = parser_parse(&parser);
+
+        if (errors->has_errors) {
+            errlist_print(errors);
+            ast_free_tree(ast);
+            free(source);
+            errlist_destroy(errors);
+            return 2;
+        }
+
+        printf("c2: check passed for '%s'\n", input_file);
+        ast_free_tree(ast);
+    } else if (strcmp(command, "verify") == 0) {
+        int vresult = verify_source(source, source_len, input_file, errors, 1);
+        free(source);
+        errlist_destroy(errors);
+        if (vresult < 0) return 2;
+        if (vresult == 1) {
+            fprintf(stderr, "c2: verification FAILED\n");
+            return 1;
+        }
+        return 0;
     } else if (strcmp(command, "derive") == 0) {
         printf("c2: derive mode for '%s' (not yet implemented, Phase F)\n", input_file);
     } else {
@@ -190,13 +218,14 @@ static void print_usage(const char* program) {
         "c2c — C² (Contract Enforced C) Compiler v1.0\n"
         "\n"
         "Usage:\n"
-        "  %s build <file>    Transpile and compile to binary\n"
-        "  %s check <file>    Verify contracts only\n"
-        "  %s derive <file>   Synthesize implementations\n"
+        "  %s build <file>    Transpile, compile, and verify derivations\n"
+        "  %s check <file>    Parse and validate contracts only\n"
+        "  %s verify <file>   Run derivation examples as unit tests\n"
+        "  %s derive <file>   Synthesize implementations (not yet implemented)\n"
         "\n"
         "Flags:\n"
         "  -o <path>          Output binary path (default: a.out)\n"
         "  --emit-c           Emit C only, do not invoke system compiler\n"
         "\n",
-        program, program, program);
+        program, program, program, program);
 }

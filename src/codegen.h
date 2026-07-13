@@ -16,6 +16,7 @@ typedef struct {
     size_t  output_len;
     size_t  output_cap;
     int     indent_level;
+    int     skip_main;  ///< Non-zero to skip emitting user's main()
     ErrorList* errors;
 } Codegen;
 

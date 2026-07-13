@@ -82,6 +82,12 @@ static void emit_node(Codegen* cg, AstNode* node) {
             break;
 
         case NODE_FUNCTION: {
+            // Skip main() in verify/derive modes to avoid linker conflict
+            if (cg->skip_main && node->token.len == 4 &&
+                memcmp(node->token.text, "main", 4) == 0) {
+                break;
+            }
+
             // Emit derivation examples as comments
             for (size_t i = 0; i < node->child_count; i++) {
                 if (node->children[i]->kind == NODE_DERIVATION) {
