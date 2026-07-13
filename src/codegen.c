@@ -139,6 +139,14 @@ static void emit_node(Codegen* cg, AstNode* node) {
             break;
 
         case NODE_DECL: {
+            // Check for borrow/own qualifiers before emitting the type
+            int is_borrow = 0;
+            int is_own = 0;
+            for (size_t ci = 1; ci < node->child_count; ci++) {
+                if (node->children[ci]->kind == NODE_BORROW_PARAM) is_borrow = 1;
+                if (node->children[ci]->kind == NODE_OWN_PARAM) is_own = 1;
+            }
+
             if (node->child_count > 0) {
                 AstNode* type_node = node->children[0];
                 // Inline struct/union/enum definition: emit body without trailing ;
@@ -190,26 +198,61 @@ static void emit_node(Codegen* cg, AstNode* node) {
                     cg_putc(cg, ' ');
                     cg_printf(cg, "%.*s", (int)node->token.len, node->token.text);
                 } else {
-                    emit_node(cg, node->children[0]);
-                    // Emit pointer stars from type node's pointer marker
-                    if (node->children[0]->kind == NODE_VARIABLE) {
-                        for (size_t ci = 0; ci < node->children[0]->child_count; ci++) {
-                            AstNode* pc = node->children[0]->children[ci];
-                            if (pc->kind == NODE_VARIABLE && pc->token.kind == TOK_STAR) {
-                                for (int pd = 0; pd < pc->flags; pd++) cg_putc(cg, '*');
+                    // For pointer types with borrow/own: emit const qualifier correctly
+                    if ((is_borrow || is_own) && node->children[0]->kind == NODE_VARIABLE) {
+                        AstNode* vt = node->children[0];
+                        // Check if this is a pointer type (has star marker)
+                        int has_star = 0;
+                        for (size_t ci = 0; ci < vt->child_count; ci++) {
+                            if (vt->children[ci]->kind == NODE_VARIABLE &&
+                                vt->children[ci]->token.kind == TOK_STAR) {
+                                has_star = 1;
+                                break;
                             }
                         }
+                        if (has_star) {
+                            // Emit: [const] type * restrict name
+                            if (is_borrow) cg_puts(cg, "const ");
+                            emit_node(cg, vt);
+                            // Emit pointer stars (count them first to add restrict)
+                            int pdepth = 0;
+                            for (size_t ci = 0; ci < vt->child_count; ci++) {
+                                AstNode* pc = vt->children[ci];
+                                if (pc->kind == NODE_VARIABLE && pc->token.kind == TOK_STAR)
+                                    pdepth = pc->flags;
+                            }
+                            if (pdepth > 0) {
+                                for (int pi = 1; pi < pdepth; pi++) cg_putc(cg, '*');
+                                cg_puts(cg, "* restrict ");
+                            } else {
+                                cg_putc(cg, ' ');
+                            }
+                            cg_printf(cg, "%.*s", (int)node->token.len, node->token.text);
+                        } else {
+                            emit_node(cg, node->children[0]);
+                            cg_putc(cg, ' ');
+                            cg_printf(cg, "%.*s", (int)node->token.len, node->token.text);
+                        }
+                    } else {
+                        emit_node(cg, node->children[0]);
+                        // Emit pointer stars from type node's pointer marker
+                        if (node->children[0]->kind == NODE_VARIABLE) {
+                            for (size_t ci = 0; ci < node->children[0]->child_count; ci++) {
+                                AstNode* pc = node->children[0]->children[ci];
+                                if (pc->kind == NODE_VARIABLE && pc->token.kind == TOK_STAR) {
+                                    for (int pd = 0; pd < pc->flags; pd++) cg_putc(cg, '*');
+                                }
+                            }
+                        }
+                        cg_putc(cg, ' ');
+                        cg_printf(cg, "%.*s", (int)node->token.len, node->token.text);
                     }
-                    cg_putc(cg, ' ');
-                    cg_printf(cg, "%.*s", (int)node->token.len, node->token.text);
                 }
             }
             for (size_t i = 1; i < node->child_count; i++) {
                 AstNode* child = node->children[i];
-                if (child->kind == NODE_BORROW_PARAM) {
-                    cg_puts(cg, " const*");
-                } else if (child->kind == NODE_OWN_PARAM) {
-                    cg_puts(cg, "*");
+                if (child->kind == NODE_BORROW_PARAM || child->kind == NODE_OWN_PARAM) {
+                    // Already handled above — skip
                 } else if (child->kind == NODE_ARRAY_SUB) {
                     cg_putc(cg, '[');
                     if (child->child_count > 0) emit_node(cg, child->children[0]);
@@ -259,7 +302,19 @@ static void emit_node(Codegen* cg, AstNode* node) {
             }
             cg->indent_level--;
             emit_indent(cg);
-            cg_puts(cg, "}\n");
+            cg_puts(cg, "}");
+            // If VRP has proven the condition is always true, emit
+            // __builtin_unreachable() after the block as an optimization hint.
+            if (node->child_count > 0) {
+                AstNode* cond = node->children[0];
+                if (cond->range.has_range && cond->range.lo > 0) {
+                    cg_puts(cg, " __builtin_unreachable();\n");
+                } else {
+                    cg_putc(cg, '\n');
+                }
+            } else {
+                cg_putc(cg, '\n');
+            }
             break;
         }
 
