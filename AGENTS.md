@@ -19,14 +19,16 @@ Build a C-to-C semantic transpiler (Contract Enforced C) that extends standard C
 - **Build modes:** Driver mode (transpile + compile) by default; `--emit-c` for transpile-only
 
 ### Work State
-- Specification (`docs/spec.md`) updated through §5.6 (early free, struct field interaction)
+- Specification (`docs/spec.md`) updated through §6.7 (synthesis engine design)
 - Architecture doc (`docs/architecture/2026-07-13-1415-early-free-drop-suppression.md`) written
 - Project scaffolding in place (`src/`, `include/`, `tests/`, `examples/`)
-- Phase A (lexer, parser, AST, codegen) implemented; bugs fixed, output compiles with gcc
-- Plan file at `docs/plans/2026-07-13-1200-phase-a-parser.md`
+- Phase A (lexer, parser, AST, codegen, verify) implemented; bugs fixed, output compiles with gcc
+- Plan files at `docs/plans/2026-07-13-1200-phase-a-parser.md`, `docs/plans/2026-07-13-1800-phase-f-derive-engine.md`
 
 ### Next Move
-Implement `do-while` parsing + codegen to complete all C23 loop constructs; then begin Phase B (type checker).
+Implement Phase F (program synthesis engine): cost-guided enumerative search
+with hard/soft constraints, Pareto frontier, and surgical source-code insertion.
+See `docs/plans/2026-07-13-1800-phase-f-derive-engine.md` for full design.
 
 ---
 
@@ -261,6 +263,6 @@ CLI entry point. Parses command-line flags and dispatches to the appropriate pip
 | D | VRP | Not started |
 | E | Borrow checker | Not started |
 | E | Drop injection | Not started |
-| F | Derivation/synthesis | Not started (CLI stub exists) |
+| F | Derivation/synthesis | Planned — cost-guided enum search, Pareto frontier, synth |
 | G | Optimizing codegen | Not started |
 | H | Self-hosting | Not started |

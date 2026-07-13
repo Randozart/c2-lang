@@ -625,70 +625,113 @@ The derivation block serves dual duty: compile-time assertion (when a body exist
 
 ### 6.1 Compile-Time Assertion Mode
 
-When a function has both a body and a derivation block:
+When a function has both a body and a derivation block, the `c2c build` and
+`c2c verify` commands check each example:
 
-1. The compiler's interpreter evaluates the function body on each input example.
-2. It compares the result to the expected output.
-3. If any assertion fails, compilation halts:
+1. The compiler evaluates the function body on each input example.
+2. It compares the result to the expected output. If a tolerance bracket
+   `[tol]` is present, the comparison uses `fabs(result - expected) > tol`.
+3. If any assertion fails, compilation halts.
+
+### 6.2 Hard and Soft Examples
+
+Examples fall into two categories:
+
+| Category | Tolerance | Behavior |
+|----------|-----------|----------|
+| **Hard** | No bracket, or `[0]` | Must match exactly. Candidate is rejected immediately if violated. |
+| **Soft** | `[tol]` where `tol > 0` | Error within tolerance passes. Error beyond tolerance contributes a normalized penalty. |
+
+This split lets the synthesis engine know which outputs are negotiable and
+which are inviolable.
+
+### 6.3 Operation Budget
+
+A budget annotation on the derivation block limits search space:
+
+```c
+} [budget(N, ops={+, -, *, /, &, |, <<, >>})];
+```
+
+- `N` = maximum operation count (inclusive). Engine enumerates 1..N.
+- `ops` = comma-separated allowed operators. Omit for all ops.
+
+A function-level annotation overrides the block-level:
+
+```c
+[budget=7]
+float approx_sqrt(float x) := { ... };
+```
+
+### 6.4 Cost-Guided Enumerative Search
+
+The engine enumerates expression trees in order of operation count (1..N).
+For each operation count, it tries all tree shapes and leaf combinations
+(function parameters + prioritized constant bank).
+
+Each candidate is scored:
 
 ```
-c2 error: Derivation assertion 1 failed in 'swap_bytes'
-  expected: 0x3412
-  got:      0x1234
-  └─ src/main.c2:3
+cost(c) = op_count(c) + sum(soft_penalty(e, c) for soft examples e)
 ```
 
-### 6.2 Program Synthesis Mode
+Where:
 
-When the body is absent and `no_derive` is not present, `c2c derive`:
+```
+soft_penalty(e, c) = max(0, |eval(c, inputs(e)) - output(e)| - tolerance(e))
+                   / max(tolerance(e), 1e-10)
+```
 
-1. Translates the input-output examples into Z3 bit-vector constraints.
-2. Searches for the minimal C expression satisfying all examples.
-3. Generates the body as a `return expression;` statement.
-4. Surgically inserts the body between the signature and `:=`.
-5. Leaves the derivation block in place as a permanent assertion.
+The engine maintains a **Pareto frontier** — candidates where no other
+candidate is both cheaper and has lower total penalty.
 
-### 6.3 SMT-Based Constraint Solving
+### 6.5 Pareto Frontier Output
 
-The synthesizer works with Z3 bit-vectors:
+When the search completes, the engine displays the frontier:
 
-1. Declares each parameter as a bit-vector of the appropriate width.
-2. For each example `(a, b) → c`, asserts `f(a, b) == c`.
-3. Uses component-based synthesis with an Occam's Razor cost model.
-4. Returns the minimum-cost expression satisfying all examples.
+```
+c2c derive approx_sqrt.c2
 
-### 6.4 Bounded Enumerative Search Fallback
+Pareto frontier:
+  ops=1  error=0.42   x
+  ops=3  error=0.09   x * 0.5 + 0.5
+  ops=5  error=0.003  (x * 0.5 + 0.5) * 0.9 + 0.1
 
-When Z3 is unavailable, the compiler uses depth-bounded enumeration:
+Select expression (default: knee at ops=3): [enter]
+Synthesized body for 'approx_sqrt':
+    return x * 0.5f + 0.5f;
+```
 
-1. Generates expression trees up to a configurable depth (default: 5).
-2. Evaluates each tree on the interpreter.
-3. Returns the first tree that satisfies all examples.
+The **knee** (closest point to origin in (ops, penalty) space) is the default
+selection. The user may pick any point on the frontier.
 
-### 6.5 Occam's Razor Cost Model
+### 6.6 Surgical Source-Code Insertion
+
+On selection, the engine inserts the body into the source file:
+
+1. Record the byte offset after the `)` closing the parameter list (before `:=`).
+2. Generate the body string: `{\n    return EXPRESSION;\n}`
+3. Open the source file as a byte array.
+4. Insert the body string at the recorded offset.
+5. Write the result back to disk.
+
+The derivation block remains in place as a permanent assertion for `c2c verify`
+on subsequent builds.
+
+### 6.7 Operation Cost Table
 
 | Expression | Cost |
 |-----------|------|
 | Constant literal | 1 |
 | Variable read | 1 |
-| Bitwise NOT (`~`) | 2 |
-| Bitwise AND/OR/XOR (`&`, `|`, `^`) | 3 |
-| Bitwise shift (`<<`, `>>`) | 3 |
-| Arithmetic (`+`, `-`) | 3 |
-| Multiplication (`*`) | 4 |
-| Conditional branch (`if-else`) | 5 |
-
-The solver minimizes total cumulative cost.
-
-### 6.6 Surgical Source-Code Insertion
-
-To preserve formatting and comments, the compiler inserts synthesized code by byte-offset splicing rather than AST pretty-printing:
-
-1. Record the exact byte offset of the location between the `)` closing the parameter list and the `:=` token.
-2. Generate the body string.
-3. Open the source file as a byte array.
-4. Insert the body string at the recorded offset.
-5. Write the result back to disk.
+| Unary `~` | 2 |
+| Unary `-` | 2 |
+| Bitwise `&`, `|`, `^` | 3 |
+| Shift `<<`, `>>` | 3 |
+| Arithmetic `+`, `-` | 3 |
+| Multiplication `*` | 4 |
+| Division `/` | 5 |
+| Ternary `?` `:` | 5 |
 
 ---
 
