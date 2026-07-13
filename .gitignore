@@ -1,0 +1,27 @@
+# Build artifacts
+/build/
+_c2_out/
+
+# Editor and OS files
+*.swp
+*.swo
+*~
+.DS_Store
+Thumbs.db
+
+# Compiler artifacts
+*.o
+*.d
+*.out
+
+# IDE
+.vscode/
+.idea/
+*.suo
+*.user
+
+# Test artifacts
+tests/*/test_*
+
+# Temporary
+/tmp/

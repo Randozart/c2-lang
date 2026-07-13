@@ -1,0 +1,45 @@
+// swap_bytes.c2 — Example C² program demonstrating contracts, derivation, and borrow checking.
+//
+// 2026-07-13 — Initial example.
+
+#include "c2.h"
+#include <stdio.h>
+
+// ── Simple contract: precondition and postcondition ─────────────────────
+[denom != 0][result == num / denom]
+int32_t divide(int32_t num, int32_t denom) {
+    return num / denom;
+}
+
+// ── Postcondition only (double-open = no pre) ───────────────────────────
+[[result >= 0]
+int32_t abs_value(int32_t x) {
+    when x < 0 -> return -x;
+    return x;
+}
+
+// ── Precondition only (double-close = no post) ──────────────────────────
+[x >= 0 && x < 100]]
+void set_index(int32_t x) {
+    // Compiler proves x is in-bounds for a 100-element array
+    int32_t arr[100];
+    arr[x] = 42;
+}
+
+// ── Derivation block: compile-time assertion ────────────────────────────
+int32_t swap_bytes(uint16_t val) {
+    return (val << 8) | (val >> 8);
+} := {
+    0x1234 -> 0x3412;
+    0x00FF -> 0xFF00;
+    0x0000 -> 0x0000;
+};
+
+// ── Main with all features ──────────────────────────────────────────────
+int32_t main(void) {
+    printf("divide(10, 3) = %d\n", divide(10, 3));
+    printf("abs_value(-5) = %d\n", abs_value(-5));
+    printf("swap_bytes(0x1234) = 0x%04X\n", swap_bytes(0x1234));
+    printf("swap_bytes(0x00FF) = 0x%04X\n", swap_bytes(0x00FF));
+    return 0;
+}
