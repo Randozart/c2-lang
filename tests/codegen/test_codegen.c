@@ -302,6 +302,23 @@ static void test_emit_switch(void) {
     PASS();
 }
 
+static void test_emit_do_while(void) {
+    TEST("emit do-while");
+    ErrorList* err = errlist_create();
+    const char* src = "[1][1]\n"
+                      "void f(int32_t x) {\n"
+                      "    do {\n"
+                      "        x = x + 1;\n"
+                      "    } while (x < 10);\n"
+                      "}\n";
+    const char* out = transpile(src, err);
+    assert(out != NULL);
+    assert(strstr(out, "do {") != NULL);
+    assert(strstr(out, "} while") != NULL);
+    errlist_destroy(err);
+    PASS();
+}
+
 static void test_emit_global_var(void) {
     TEST("emit global variable");
     ErrorList* err = errlist_create();
@@ -341,6 +358,7 @@ int main(void) {
     test_emit_enum();
     test_emit_typedef();
     test_emit_switch();
+    test_emit_do_while();
     test_emit_global_var();
 
     printf("\n%d/%d tests passed\n", tests_passed, tests_run);

@@ -664,6 +664,25 @@ static AstNode* parse_statement(Parser* p) {
         return node;
     }
 
+    // do stmt while (expr);
+    if (match(p, TOK_DO)) {
+        AstNode* body = parse_statement(p);
+        Token do_tok = peek(p);
+        if (!match(p, TOK_WHILE)) {
+            errlist_add(p->errors, ERROR_LEVEL_ERROR, peek(p).loc,
+                        "expected 'while' after 'do' body");
+            return NULL;
+        }
+        expect(p, TOK_LPAREN);
+        AstNode* cond = parse_expr(p);
+        expect(p, TOK_RPAREN);
+        expect(p, TOK_SEMI);
+        AstNode* node = ast_alloc_node(NODE_DO_WHILE, do_tok);
+        if (body) ast_add_child(node, body);
+        if (cond) ast_add_child(node, cond);
+        return node;
+    }
+
     // for (init; cond; inc) stmt
     if (match(p, TOK_FOR)) {
         expect(p, TOK_LPAREN);

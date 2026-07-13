@@ -489,6 +489,49 @@ static void test_switch_basic(void) {
     PASS();
 }
 
+static void test_do_while(void) {
+    TEST("parse do-while with simple body");
+    ErrorList* err = errlist_create();
+    const char* src = "[1][1]\n"
+                      "void f(int32_t x) {\n"
+                      "    do\n"
+                      "        x = x + 1;\n"
+                      "    while (x < 10);\n"
+                      "}\n";
+    AstNode* root = parse_source(src, err);
+    assert(root != NULL && root->child_count == 1);
+    AstNode* func = root->children[0];
+    assert(func->kind == NODE_FUNCTION);
+    AstNode* body = func->children[4];
+    assert(body->kind == NODE_BLOCK);
+    assert(body->child_count == 1);
+    assert(body->children[0]->kind == NODE_DO_WHILE);
+    assert(body->children[0]->child_count == 2);
+    ast_free_tree(root);
+    errlist_destroy(err);
+    PASS();
+
+    TEST("parse do-while with compound body");
+    ErrorList* err2 = errlist_create();
+    const char* src2 = "[1][1]\n"
+                       "void f(int32_t x) {\n"
+                       "    do {\n"
+                       "        x = x + 1;\n"
+                       "    } while (x < 10);\n"
+                       "}\n";
+    AstNode* root2 = parse_source(src2, err2);
+    assert(root2 != NULL && root2->child_count == 1);
+    AstNode* func2 = root2->children[0];
+    assert(func2->kind == NODE_FUNCTION);
+    AstNode* body2 = func2->children[4];
+    assert(body2->kind == NODE_BLOCK);
+    assert(body2->child_count == 1);
+    assert(body2->children[0]->kind == NODE_DO_WHILE);
+    ast_free_tree(root2);
+    errlist_destroy(err2);
+    PASS();
+}
+
 static void test_global_var(void) {
     TEST("parse global variable");
     ErrorList* err = errlist_create();
@@ -536,6 +579,7 @@ int main(void) {
     test_enum_decl();
     test_typedef();
     test_switch_basic();
+    test_do_while();
     test_global_var();
 
     printf("\n%d/%d tests passed\n", tests_passed, tests_run);

@@ -325,6 +325,29 @@ static void emit_node(Codegen* cg, AstNode* node) {
             break;
         }
 
+        case NODE_DO_WHILE: {
+            emit_indent(cg);
+            cg_puts(cg, "do {");
+            cg->indent_level++;
+            if (node->child_count > 0) {
+                if (node->children[0]->kind == NODE_BLOCK) {
+                    cg->indent_level--;
+                    cg_putc(cg, '\n');
+                    emit_node(cg, node->children[0]);
+                    cg->indent_level++;
+                } else {
+                    cg_putc(cg, '\n');
+                    emit_node(cg, node->children[0]);
+                }
+            }
+            cg->indent_level--;
+            emit_indent(cg);
+            cg_puts(cg, "} while (");
+            if (node->child_count > 1) emit_node(cg, node->children[1]);
+            cg_puts(cg, ");\n");
+            break;
+        }
+
         case NODE_FOR: {
             emit_indent(cg);
             cg_puts(cg, "for (");
