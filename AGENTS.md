@@ -19,16 +19,20 @@ Build a C-to-C semantic transpiler (Contract Enforced C) that extends standard C
 - **Build modes:** Driver mode (transpile + compile) by default; `--emit-c` for transpile-only
 
 ### Work State
-- Specification (`docs/spec.md`) updated through §6.7 (synthesis engine design)
-- Architecture doc (`docs/architecture/2026-07-13-1415-early-free-drop-suppression.md`) written
-- Project scaffolding in place (`src/`, `include/`, `tests/`, `examples/`)
-- Phase A (lexer, parser, AST, codegen, verify) implemented; bugs fixed, output compiles with gcc
-- Plan files at `docs/plans/2026-07-13-1200-phase-a-parser.md`, `docs/plans/2026-07-13-1800-phase-f-derive-engine.md`
+- **Phases A–G complete.** The compiler has 9 passes (lexer, parser, typecheck,
+  VRP, borrow check, drop inject, codegen, Z3 verify, synthesis).
+- **180+ tests** across 10 test suites, including 10 end-to-end pipeline tests
+  (C² → transpile → GCC → run → verify output).
+- Key bugs fixed: deep-copy type ownership model, dead-scope symbol lookups,
+  postfix ++/-- token storage, for-loop declaration parsing, NODE_DECL name
+  extraction, codegen `#include <stdint.h>`, double-brace emission.
+- Architecture docs at `docs/architecture/`.
+- Plan files at `docs/plans/`.
 
 ### Next Move
-Implement Phase F (program synthesis engine): cost-guided enumerative search
-with hard/soft constraints, Pareto frontier, and surgical source-code insertion.
-See `docs/plans/2026-07-13-1800-phase-f-derive-engine.md` for full design.
+Phase H — Self-hosting. See `docs/plans/2026-07-13-2359-phase-h-self-hosting.md`
+for comprehensive plan. Requires: C library bindings, void* support, variadic
+extern decls, static/const qualifiers, and incremental file-by-file rewrite.
 
 ---
 
@@ -254,15 +258,15 @@ CLI entry point. Parses command-line flags and dispatches to the appropriate pip
 | Phase | Module | Status |
 |-------|--------|--------|
 | A | Lexer | Complete (58 tests) |
-| A | Parser | Complete (30 tests) — all C23 + C² syntax |
+| A | Parser | Complete (33 tests) — all C23 + C² syntax |
 | A | AST | Complete — all node types defined |
-| A | Codegen | Complete (17 tests) — emits valid C |
+| A | Codegen | Complete (19 tests) — emits valid C with stdint.h |
 | A | Verify | Complete — built-in derivation unit tester |
-| B | Type checker | Not started |
-| C | Z3 verifier | Not started |
-| D | VRP | Not started |
-| E | Borrow checker | Not started |
-| E | Drop injection | Not started |
-| F | Derivation/synthesis | Planned — cost-guided enum search, Pareto frontier, synth |
-| G | Optimizing codegen | Not started |
-| H | Self-hosting | Not started |
+| B | Type checker | Complete (33 tests) — full type inference |
+| C | Z3 verifier | Complete (13 tests) — BV formula translation |
+| D | VRP | Complete (6 tests) — range inference for loops/guards |
+| E | Borrow checker | Complete (3 tests) — 5-state lifecycle validation |
+| E | Drop injection | Complete (1 test) — scope-boundary destructors |
+| F | Derivation/synthesis | Complete (4 tests) — enum search, Pareto frontier, source mutation |
+| G | Optimizing codegen | Complete — restrict/const on borrow, unreachable hints |
+| H | Self-hosting | Planned — see `docs/plans/2026-07-13-2359-phase-h-self-hosting.md` |
