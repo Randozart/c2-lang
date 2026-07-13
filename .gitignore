@@ -21,8 +21,8 @@ Thumbs.db
 *.suo
 *.user
 
-# Test artifacts
-tests/*/test_*
+# Test binaries (compiled test programs live under build/tests/)
+build/tests/
 
 # Temporary
 /tmp/

@@ -18,7 +18,7 @@ LDFLAGS := $(Z3_LDFLAGS)
 
 SRC_DIR := src
 BUILD_DIR := build
-TARGET := $(BUILD_DIR)/c2
+TARGET := $(BUILD_DIR)/c2c
 
 # Collect all source files
 SRCS := $(wildcard $(SRC_DIR)/*.c)
@@ -45,6 +45,7 @@ dirs:
 $(TARGET): $(OBJS)
 	@echo "Linking $@..."
 	@$(CC) $(CFLAGS) -o $@ $^ $(LDFLAGS)
+	@ln -sf c2c $(BUILD_DIR)/c2
 	@echo "Build complete: $@"
 
 # Compile each source file
@@ -56,16 +57,25 @@ $(BUILD_DIR)/%.o: $(SRC_DIR)/%.c
 -include $(DEPS)
 
 # Build and run all tests
-test: $(TARGET)
+TEST_OBJS := $(filter-out $(BUILD_DIR)/main.o, $(OBJS))
+test: dirs $(OBJS)
 	@echo "Running test suite..."
-	@for test_src in $(TEST_SRCS); do \
+	@total=0; passed=0; \
+	for test_src in $(TEST_SRCS); do \
 		test_name=$$(basename "$$test_src" .c); \
 		test_bin="$(BUILD_DIR)/tests/$$test_name"; \
 		echo "  Building test: $$test_name..."; \
-		$(CC) $(CFLAGS) -Iinclude -I$(SRC_DIR) -o "$$test_bin" "$$test_src" $(LDFLAGS) -lcriterion 2>/dev/null && \
-		"$$test_bin" 2>/dev/null && echo "    PASS" || echo "    SKIP (no criterion or test framework)"; \
-	done
-	@echo "Test suite complete."
+		if $(CC) $(CFLAGS) -Iinclude -I$(SRC_DIR) -o "$$test_bin" "$$test_src" $(TEST_OBJS) $(LDFLAGS) 2>&1; then \
+			total=$$((total + 1)); \
+			if "$$test_bin"; then \
+				passed=$$((passed + 1)); \
+			fi; \
+		else \
+			echo "    BUILD FAILED"; \
+		fi; \
+	done; \
+	echo ""; \
+	echo "Test suite complete: $$passed/$$total test suites passed"
 
 # Build all example .c2 files
 examples: $(TARGET)

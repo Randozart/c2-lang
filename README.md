@@ -11,10 +11,10 @@
 
 **Compile-time verified contracts, automatic memory management, and program synthesis for C.**
 
-C² is a C-to-C semantic transpiler that extends standard C23 with mathematically proven safety guarantees — without runtime overhead, garbage collection, or sacrificing C ABIs.
+C² is a C-to-C semantic transpiler (the `c2c` compiler) that extends standard C23 with mathematically proven safety guarantees — without runtime overhead, garbage collection, or sacrificing C ABIs.
 
 ```
-[c2 source]  ─→  Parser  ─→  Z3 SMT Verifier  ─→  Borrow Checker  ─→  C Codegen  ─→  GCC/Clang
+[c2 source]  ─→  c2c  ─→  Z3 SMT Verifier  ─→  Borrow Checker  ─→  C Codegen  ─→  GCC/Clang
 ```
 
 ## Features
@@ -32,17 +32,20 @@ C² is a C-to-C semantic transpiler that extends standard C23 with mathematicall
 ## Quick Start
 
 ```bash
+# Build the c2c compiler
+make
+
 # Build a C² program (transpile + compile to binary)
-c2 build examples/swap_bytes.c2 -o swap_bytes
+./build/c2c build examples/swap_bytes.c2 -o swap_bytes
 
 # Verify contracts only
-c2 check examples/swap_bytes.c2
+./build/c2c check examples/swap_bytes.c2
 
 # Transpile to C only
-c2 build examples/swap_bytes.c2 --emit-c
+./build/c2c build examples/swap_bytes.c2 --emit-c
 
 # Synthesize implementations from examples
-c2 derive examples/draft.c2
+./build/c2c derive examples/draft.c2
 ```
 
 ## Example

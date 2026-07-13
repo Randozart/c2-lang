@@ -189,7 +189,7 @@ A derivation block provides a set of input-output examples that serve as either 
 
 #### State A: Synthesized (Body Omitted)
 
-When the function body is omitted, the derivation block follows the signature directly. The compiler (when invoked with `c2 derive`) synthesizes the body.
+When the function body is omitted, the derivation block follows the signature directly. The compiler (when invoked with `c2c derive`) synthesizes the body.
 
 ```c
 int32_t swap_bytes(uint16_t val) := {
@@ -231,7 +231,7 @@ int32_t swap_bytes(uint16_t val) {
 
 ### 2.5 The `no_derive` Pragma
 
-The `no_derive` keyword, placed before a function signature, prevents the synthesis engine from attempting to generate the body during a `c2 derive` pass. It is used for functions whose specification is not yet ready for automated synthesis.
+The `no_derive` keyword, placed before a function signature, prevents the synthesis engine from attempting to generate the body during a `c2c derive` pass. It is used for functions whose specification is not yet ready for automated synthesis.
 
 ```c
 no_derive
@@ -637,7 +637,7 @@ c2 error: Derivation assertion 1 failed in 'swap_bytes'
 
 ### 6.2 Program Synthesis Mode
 
-When the body is absent and `no_derive` is not present, `c2 derive`:
+When the body is absent and `no_derive` is not present, `c2c derive`:
 
 1. Translates the input-output examples into Z3 bit-vector constraints.
 2. Searches for the minimal C expression satisfying all examples.
@@ -741,10 +741,10 @@ void process(Vector* vec) __attribute__((nonnull(1)));
 
 | Command | Description |
 |---------|-------------|
-| `c2 build <file> [flags]` | Transpile and compile to binary (driver mode) |
-| `c2 check <file>` | Verify contracts and borrows only; no codegen |
-| `c2 derive <file>` | Synthesize implementations for functions in draft state |
-| `c2 derive --all <path>` | Project-wide synthesis over all `.c2` files |
+| `c2c build <file> [flags]` | Transpile and compile to binary (driver mode) |
+| `c2c check <file>` | Verify contracts and borrows only; no codegen |
+| `c2c derive <file>` | Synthesize implementations for functions in draft state |
+| `c2c derive --all <path>` | Project-wide synthesis over all `.c2` files |
 
 ### 8.2 Flags
 
@@ -884,7 +884,7 @@ The compiler is built in seven phases, each producing a working (if minimal) com
 ### Phase A: Foundation (Parser + AST + C Codegen)
 
 **Duration:** ~2 weeks  
-**Deliverable:** `c2 build` that can parse a subset of C² (functions, variables, contracts, guards) and emit standard C code — no verification yet.
+**Deliverable:** `c2c build` that can parse a subset of C² (functions, variables, contracts, guards) and emit standard C code — no verification yet.
 
 **Files:**
 - `src/main.c`, `src/lexer.c`, `src/parser.c`, `src/ast.h`, `src/codegen.c`
@@ -925,7 +925,7 @@ The compiler is built in seven phases, each producing a working (if minimal) com
 ### Phase F: Program Synthesis
 
 **Duration:** ~2 weeks  
-**Deliverable:** `c2 derive` command, Z3-based component synthesis, bounded enumerative fallback, surgical source-code insertion.
+**Deliverable:** `c2c derive` command, Z3-based component synthesis, bounded enumerative fallback, surgical source-code insertion.
 
 **Files:**
 - `src/derive.c`, `src/derive.h`

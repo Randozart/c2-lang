@@ -187,7 +187,7 @@ static int compile_c_file(const char* c_path, const char* output_path) {
 
 static void print_usage(const char* program) {
     fprintf(stderr,
-        "C² (Contract Enforced C) — Compiler v1.0\n"
+        "c2c — C² (Contract Enforced C) Compiler v1.0\n"
         "\n"
         "Usage:\n"
         "  %s build <file>    Transpile and compile to binary\n"

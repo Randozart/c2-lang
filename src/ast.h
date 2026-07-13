@@ -58,6 +58,10 @@ typedef enum {
     NODE_DECL,
     NODE_PARAM_LIST,
     NODE_STRUCT_DECL,
+    NODE_UNION_DECL,
+    NODE_ENUM_DECL,
+    NODE_STRUCT_FIELD,
+    NODE_ARRAY_SUB,          // Array subscript marker in declarations (child = size)
     NODE_TYPEDEF,
     NODE_EXTERN,
     NODE_STATIC_ASSERT,

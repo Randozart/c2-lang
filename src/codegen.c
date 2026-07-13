@@ -133,24 +133,71 @@ static void emit_node(Codegen* cg, AstNode* node) {
             break;
 
         case NODE_DECL: {
-            // Type (first child)
             if (node->child_count > 0) {
-                emit_node(cg, node->children[0]);
-                cg_putc(cg, ' ');
+                AstNode* type_node = node->children[0];
+                // Inline struct/union/enum definition: emit body without trailing ;
+                if (type_node->kind == NODE_STRUCT_DECL ||
+                    type_node->kind == NODE_UNION_DECL ||
+                    type_node->kind == NODE_ENUM_DECL) {
+                    const char* kw = type_node->kind == NODE_STRUCT_DECL ? "struct "
+                                   : type_node->kind == NODE_UNION_DECL  ? "union "
+                                   :                                      "enum ";
+                    cg_puts(cg, kw);
+                    size_t ci = 0;
+                    if (ci < type_node->child_count && type_node->children[ci]->kind == NODE_VARIABLE) {
+                        emit_node(cg, type_node->children[ci]);
+                        cg_putc(cg, ' ');
+                        ci++;
+                    }
+                    int has_body = 0;
+                    for (size_t j = ci; j < type_node->child_count; j++) {
+                        if (type_node->children[j]->kind == NODE_STRUCT_FIELD) { has_body = 1; break; }
+                    }
+                    if (has_body) {
+                        cg_puts(cg, "{\n");
+                        cg->indent_level++;
+                        for (size_t j = ci; j < type_node->child_count; j++) {
+                            AstNode* field = type_node->children[j];
+                            if (field->kind == NODE_STRUCT_FIELD) {
+                                emit_indent(cg);
+                                if (field->child_count > 0) emit_node(cg, field->children[0]);
+                                cg_putc(cg, ' ');
+                                cg_printf(cg, "%.*s", (int)field->token.len, field->token.text);
+                                for (size_t k = 1; k < field->child_count; k++) {
+                                    if (field->children[k]->kind == NODE_ARRAY_SUB) {
+                                        cg_putc(cg, '[');
+                                        if (field->children[k]->child_count > 0)
+                                            emit_node(cg, field->children[k]->children[0]);
+                                        cg_putc(cg, ']');
+                                    } else {
+                                        cg_puts(cg, " = ");
+                                        emit_node(cg, field->children[k]);
+                                    }
+                                }
+                                cg_puts(cg, ";\n");
+                            }
+                        }
+                        cg->indent_level--;
+                        emit_indent(cg);
+                        cg_putc(cg, '}');
+                    }
+                    cg_putc(cg, ' ');
+                    cg_printf(cg, "%.*s", (int)node->token.len, node->token.text);
+                } else {
+                    emit_node(cg, node->children[0]);
+                    cg_putc(cg, ' ');
+                    cg_printf(cg, "%.*s", (int)node->token.len, node->token.text);
+                }
             }
-            // Variable/param name
-            cg_printf(cg, "%.*s", (int)node->token.len, node->token.text);
-            // Children after type: array size, initializer, borrow/own
             for (size_t i = 1; i < node->child_count; i++) {
                 AstNode* child = node->children[i];
                 if (child->kind == NODE_BORROW_PARAM) {
                     cg_puts(cg, " const*");
                 } else if (child->kind == NODE_OWN_PARAM) {
                     cg_puts(cg, "*");
-                } else if (child->kind == NODE_LITERAL_INT || child->kind == NODE_VARIABLE ||
-                           child->kind == NODE_BINARY_OP) {
+                } else if (child->kind == NODE_ARRAY_SUB) {
                     cg_putc(cg, '[');
-                    emit_node(cg, child);
+                    if (child->child_count > 0) emit_node(cg, child->children[0]);
                     cg_putc(cg, ']');
                 } else {
                     cg_puts(cg, " = ");
@@ -472,8 +519,206 @@ static void emit_node(Codegen* cg, AstNode* node) {
         }
 
         case NODE_VARIABLE: {
-            // Variable reference (extract from token)
             cg_printf(cg, "%.*s", (int)node->token.len, node->token.text);
+            // struct/union/enum type: emit `struct Foo` not just `struct`
+            if ((node->token.kind == TOK_STRUCT || node->token.kind == TOK_UNION || node->token.kind == TOK_ENUM)
+                && node->child_count > 0) {
+                cg_putc(cg, ' ');
+                emit_node(cg, node->children[0]);
+            }
+            break;
+        }
+
+        case NODE_STRUCT_DECL: {
+            emit_indent(cg);
+            cg_puts(cg, "struct ");
+            // First child is optional name (NODE_VARIABLE)
+            size_t ci = 0;
+            if (ci < node->child_count && node->children[ci]->kind == NODE_VARIABLE) {
+                emit_node(cg, node->children[ci]);
+                cg_putc(cg, ' ');
+                ci++;
+            }
+            // Check if forward declaration (no field children)
+            int has_fields = 0;
+            for (size_t j = ci; j < node->child_count; j++) {
+                if (node->children[j]->kind == NODE_STRUCT_FIELD) { has_fields = 1; break; }
+            }
+            if (has_fields) {
+                cg_puts(cg, "{\n");
+                cg->indent_level++;
+                for (size_t j = ci; j < node->child_count; j++) {
+                    AstNode* field = node->children[j];
+                    if (field->kind == NODE_STRUCT_FIELD) {
+                        emit_indent(cg);
+                        if (field->child_count > 0) emit_node(cg, field->children[0]);
+                        cg_putc(cg, ' ');
+                        cg_printf(cg, "%.*s", (int)field->token.len, field->token.text);
+                        // Array subscript?
+                        for (size_t k = 1; k < field->child_count; k++) {
+                            cg_putc(cg, '[');
+                            emit_node(cg, field->children[k]);
+                            cg_putc(cg, ']');
+                        }
+                        cg_puts(cg, ";\n");
+                    }
+                }
+                cg->indent_level--;
+                emit_indent(cg);
+                cg_putc(cg, '}');
+            }
+            cg_puts(cg, ";\n");
+            break;
+        }
+
+        case NODE_UNION_DECL: {
+            emit_indent(cg);
+            cg_puts(cg, "union ");
+            size_t ci = 0;
+            if (ci < node->child_count && node->children[ci]->kind == NODE_VARIABLE) {
+                emit_node(cg, node->children[ci]);
+                cg_putc(cg, ' ');
+                ci++;
+            }
+            int has_fields = 0;
+            for (size_t j = ci; j < node->child_count; j++) {
+                if (node->children[j]->kind == NODE_STRUCT_FIELD) { has_fields = 1; break; }
+            }
+            if (has_fields) {
+                cg_puts(cg, "{\n");
+                cg->indent_level++;
+                for (size_t j = ci; j < node->child_count; j++) {
+                    AstNode* field = node->children[j];
+                    if (field->kind == NODE_STRUCT_FIELD) {
+                        emit_indent(cg);
+                        if (field->child_count > 0) emit_node(cg, field->children[0]);
+                        cg_putc(cg, ' ');
+                        cg_printf(cg, "%.*s", (int)field->token.len, field->token.text);
+                        for (size_t k = 1; k < field->child_count; k++) {
+                            cg_putc(cg, '[');
+                            emit_node(cg, field->children[k]);
+                            cg_putc(cg, ']');
+                        }
+                        cg_puts(cg, ";\n");
+                    }
+                }
+                cg->indent_level--;
+                emit_indent(cg);
+                cg_putc(cg, '}');
+            }
+            cg_puts(cg, ";\n");
+            break;
+        }
+
+        case NODE_ENUM_DECL: {
+            emit_indent(cg);
+            cg_puts(cg, "enum ");
+            size_t ci = 0;
+            if (ci < node->child_count && node->children[ci]->kind == NODE_VARIABLE) {
+                emit_node(cg, node->children[ci]);
+                cg_putc(cg, ' ');
+                ci++;
+            }
+            int has_enumerators = 0;
+            for (size_t j = ci; j < node->child_count; j++) {
+                if (node->children[j]->kind == NODE_STRUCT_FIELD) { has_enumerators = 1; break; }
+            }
+            if (has_enumerators) {
+                cg_puts(cg, "{\n");
+                cg->indent_level++;
+                for (size_t j = ci; j < node->child_count; j++) {
+                    AstNode* enumerator = node->children[j];
+                    if (enumerator->kind == NODE_STRUCT_FIELD) {
+                        emit_indent(cg);
+                        cg_printf(cg, "%.*s", (int)enumerator->token.len, enumerator->token.text);
+                        if (enumerator->child_count > 0) {
+                            cg_puts(cg, " = ");
+                            emit_node(cg, enumerator->children[0]);
+                        }
+                        if (j + 1 < node->child_count) cg_putc(cg, ',');
+                        cg_putc(cg, '\n');
+                    }
+                }
+                cg->indent_level--;
+                emit_indent(cg);
+                cg_putc(cg, '}');
+            }
+            cg_puts(cg, ";\n");
+            break;
+        }
+
+        case NODE_ARRAY_SUB: {
+            cg_putc(cg, '[');
+            if (node->child_count > 0) emit_node(cg, node->children[0]);
+            cg_putc(cg, ']');
+            break;
+        }
+
+        case NODE_TYPEDEF: {
+            emit_indent(cg);
+            cg_puts(cg, "typedef ");
+            // Children: [0] = type (may be struct/union/enum decl), [1] = name
+            if (node->child_count > 0) {
+                AstNode* type_node = node->children[0];
+                // For typedef struct/union/enum { ... } Name; emit without extra ;
+                if (type_node->kind == NODE_STRUCT_DECL ||
+                    type_node->kind == NODE_UNION_DECL ||
+                    type_node->kind == NODE_ENUM_DECL) {
+                    // Emit struct/union/enum name { ... }
+                    const char* kw = type_node->kind == NODE_STRUCT_DECL ? "struct "
+                                   : type_node->kind == NODE_UNION_DECL  ? "union "
+                                   :                                      "enum ";
+                    cg_puts(cg, kw);
+                    size_t ci = 0;
+                    if (ci < type_node->child_count && type_node->children[ci]->kind == NODE_VARIABLE) {
+                        emit_node(cg, type_node->children[ci]);
+                        cg_putc(cg, ' ');
+                        ci++;
+                    }
+                    int has_body = 0;
+                    for (size_t j = ci; j < type_node->child_count; j++) {
+                        if (type_node->children[j]->kind == NODE_STRUCT_FIELD) { has_body = 1; break; }
+                    }
+                    if (has_body) {
+                        cg_puts(cg, "{\n");
+                        cg->indent_level++;
+                        for (size_t j = ci; j < type_node->child_count; j++) {
+                            AstNode* field = type_node->children[j];
+                            if (field->kind == NODE_STRUCT_FIELD) {
+                                emit_indent(cg);
+                                if (field->child_count > 0) emit_node(cg, field->children[0]);
+                                cg_putc(cg, ' ');
+                                const char* fname = field->token.text;
+                                size_t flen = field->token.len;
+                                cg_printf(cg, "%.*s", (int)flen, fname);
+                                for (size_t k = 1; k < field->child_count; k++) {
+                                    if (field->children[k]->kind == NODE_ARRAY_SUB) {
+                                        cg_putc(cg, '[');
+                                        if (field->children[k]->child_count > 0)
+                                            emit_node(cg, field->children[k]->children[0]);
+                                        cg_putc(cg, ']');
+                                    } else {
+                                        cg_puts(cg, " = ");
+                                        emit_node(cg, field->children[k]);
+                                    }
+                                }
+                                cg_puts(cg, ";\n");
+                            }
+                        }
+                        cg->indent_level--;
+                        emit_indent(cg);
+                        cg_putc(cg, '}');
+                    }
+                    cg_putc(cg, ' ');
+                    if (node->child_count > 1) emit_node(cg, node->children[1]);
+                    cg_puts(cg, ";\n");
+                } else {
+                    emit_node(cg, type_node);
+                    cg_putc(cg, ' ');
+                    if (node->child_count > 1) emit_node(cg, node->children[1]);
+                    cg_puts(cg, ";\n");
+                }
+            }
             break;
         }
 

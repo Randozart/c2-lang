@@ -1,0 +1,419 @@
+// 2026-07-13 — Unit tests for the C² parser.
+//   Tests parsing of C23 and C² constructs into AST nodes.
+
+#include <assert.h>
+#include <stdio.h>
+#include <string.h>
+#include <stdlib.h>
+#include "lexer.h"
+#include "ast.h"
+#include "parser.h"
+#include "error.h"
+
+static int tests_run = 0;
+static int tests_passed = 0;
+
+#define TEST(name) do { \
+    printf("  %-50s ", name); \
+    tests_run++; \
+} while (0)
+
+#define PASS() do { \
+    printf("PASS\n"); \
+    tests_passed++; \
+} while (0)
+
+#define FAIL(msg) do { \
+    printf("FAIL: %s\n", msg); \
+} while (0)
+
+static AstNode* parse_source(const char* src, ErrorList* err) {
+    Parser parser = parser_create(src, strlen(src), "test", err);
+    return parser_parse(&parser);
+}
+
+static void test_empty_file(void) {
+    TEST("parse empty file");
+    ErrorList* err = errlist_create();
+    AstNode* root = parse_source("", err);
+    assert(root != NULL);
+    assert(root->kind == NODE_TRANSLATION_UNIT);
+    assert(root->child_count == 0);
+    assert(errlist_count(err) == 0);
+    ast_free_tree(root);
+    errlist_destroy(err);
+    PASS();
+}
+
+static void test_simple_function(void) {
+    TEST("parse function with contract");
+    ErrorList* err = errlist_create();
+    const char* src = "[x > 0][result == x + 1]\n"
+                      "int32_t increment(int32_t x) {\n"
+                      "    return x + 1;\n"
+                      "}\n";
+    AstNode* root = parse_source(src, err);
+    assert(root != NULL);
+    assert(root->kind == NODE_TRANSLATION_UNIT);
+    assert(root->child_count == 1);
+    AstNode* func = root->children[0];
+    assert(func->kind == NODE_FUNCTION);
+    ast_free_tree(root);
+    errlist_destroy(err);
+    PASS();
+}
+
+static void test_func_no_contract(void) {
+    TEST("parse function missing contract emits error");
+    ErrorList* err = errlist_create();
+    const char* src = "void foo(void) {\n"
+                      "    return;\n"
+                      "}\n";
+    AstNode* root = parse_source(src, err);
+    assert(root != NULL);
+    // Should have at least one error since contract is required
+    assert(errlist_count(err) > 0 || err->has_errors);
+    ast_free_tree(root);
+    errlist_destroy(err);
+    PASS();
+}
+
+static void test_contract_forms(void) {
+    TEST("[[post-only] contract");
+    ErrorList* err = errlist_create();
+    const char* src = "[[result == 0]\n"
+                      "int32_t zero(void) {\n"
+                      "    return 0;\n"
+                      "}\n";
+    AstNode* root = parse_source(src, err);
+    assert(root != NULL && root->child_count == 1);
+    assert(root->children[0]->kind == NODE_FUNCTION);
+    ast_free_tree(root);
+    errlist_destroy(err);
+    PASS();
+
+    TEST("[pre]] contract (no post)");
+    ErrorList* err2 = errlist_create();
+    const char* src2 = "[x != 0]]\n"
+                       "int32_t invert(int32_t x) {\n"
+                       "    return -x;\n"
+                       "}\n";
+    AstNode* root2 = parse_source(src2, err2);
+    assert(root2 != NULL && root2->child_count == 1);
+    assert(root2->children[0]->kind == NODE_FUNCTION);
+    ast_free_tree(root2);
+    errlist_destroy(err2);
+    PASS();
+}
+
+static void test_if_statement(void) {
+    TEST("parse if statement");
+    ErrorList* err = errlist_create();
+    const char* src = "[x >= 0][result == x]\n"
+                      "int32_t abs(int32_t x) {\n"
+                      "    if (x < 0) {\n"
+                      "        return -x;\n"
+                      "    }\n"
+                      "    return x;\n"
+                      "}\n";
+    AstNode* root = parse_source(src, err);
+    assert(root != NULL && root->child_count == 1);
+    assert(root->children[0]->kind == NODE_FUNCTION);
+    ast_free_tree(root);
+    errlist_destroy(err);
+    PASS();
+}
+
+static void test_if_else(void) {
+    TEST("parse if-else statement");
+    ErrorList* err = errlist_create();
+    const char* src = "[1][1]\n"
+                      "int32_t test(int32_t x) {\n"
+                      "    if (x > 0) {\n"
+                      "        return 1;\n"
+                      "    } else {\n"
+                      "        return 0;\n"
+                      "    }\n"
+                      "}\n";
+    AstNode* root = parse_source(src, err);
+    assert(root != NULL && root->child_count == 1);
+    ast_free_tree(root);
+    errlist_destroy(err);
+    PASS();
+}
+
+static void test_while_statement(void) {
+    TEST("parse while loop");
+    ErrorList* err = errlist_create();
+    const char* src = "[n >= 0][result == n * (n + 1) / 2]\n"
+                      "int32_t sum_n(int32_t n) {\n"
+                      "    int32_t i = 0;\n"
+                      "    int32_t s = 0;\n"
+                      "    while (i <= n) {\n"
+                      "        s = s + i;\n"
+                      "        i = i + 1;\n"
+                      "    }\n"
+                      "    return s;\n"
+                      "}\n";
+    AstNode* root = parse_source(src, err);
+    assert(root != NULL && root->child_count == 1);
+    assert(root->children[0]->kind == NODE_FUNCTION);
+    ast_free_tree(root);
+    errlist_destroy(err);
+    PASS();
+}
+
+static void test_for_statement(void) {
+    TEST("parse for loop");
+    ErrorList* err = errlist_create();
+    const char* src = "[1][1]\n"
+                      "void count(void) {\n"
+                      "    for (int32_t i = 0; i < 10; i = i + 1) {\n"
+                      "        ;\n"
+                      "    }\n"
+                      "}\n";
+    AstNode* root = parse_source(src, err);
+    assert(root != NULL && root->child_count == 1);
+    assert(root->children[0]->kind == NODE_FUNCTION);
+    ast_free_tree(root);
+    errlist_destroy(err);
+    PASS();
+}
+
+static void test_derivation_block(void) {
+    TEST("parse derivation block");
+    ErrorList* err = errlist_create();
+    const char* src = "[1][1]\n"
+                      "int32_t add(int32_t a, int32_t b) := {\n"
+                      "    1, 2 -> 3;\n"
+                      "    10, 20 -> 30;\n"
+                      "};\n";
+    AstNode* root = parse_source(src, err);
+    assert(root != NULL && root->child_count == 1);
+    assert(root->children[0]->kind == NODE_FUNCTION);
+    ast_free_tree(root);
+    errlist_destroy(err);
+    PASS();
+}
+
+static void test_when_guard(void) {
+    TEST("parse when guard in function body");
+    ErrorList* err = errlist_create();
+    const char* src = "[x != 0][1]\n"
+                      "int32_t div10(int32_t x) {\n"
+                      "    when x > 0 -> return x / 10;\n"
+                      "    return x / 10;\n"
+                      "}\n";
+    AstNode* root = parse_source(src, err);
+    assert(root != NULL && root->child_count == 1);
+    ast_free_tree(root);
+    errlist_destroy(err);
+    PASS();
+}
+
+static void test_no_derive(void) {
+    TEST("parse no_derive function");
+    ErrorList* err = errlist_create();
+    const char* src = "no_derive [1][1]\n"
+                      "int32_t stub(int32_t x);\n";
+    AstNode* root = parse_source(src, err);
+    assert(root != NULL && root->child_count == 1);
+    assert(root->children[0]->kind == NODE_FUNCTION);
+    ast_free_tree(root);
+    errlist_destroy(err);
+    PASS();
+}
+
+static void test_expressions(void) {
+    TEST("parse complex expression");
+    ErrorList* err = errlist_create();
+    const char* src = "[1][1]\n"
+                      "int32_t compute(int32_t a, int32_t b) {\n"
+                      "    return (a + b) * (a - b) / 2;\n"
+                      "}\n";
+    AstNode* root = parse_source(src, err);
+    assert(root != NULL && root->child_count == 1);
+    assert(root->children[0]->kind == NODE_FUNCTION);
+    ast_free_tree(root);
+    errlist_destroy(err);
+    PASS();
+
+    TEST("parse ternary expression");
+    ErrorList* err2 = errlist_create();
+    const char* src2 = "[1][1]\n"
+                       "int32_t max(int32_t a, int32_t b) {\n"
+                       "    return a > b ? a : b;\n"
+                       "}\n";
+    AstNode* root2 = parse_source(src2, err2);
+    assert(root2 != NULL && root2->child_count == 1);
+    ast_free_tree(root2);
+    errlist_destroy(err2);
+    PASS();
+}
+
+static void test_pointer_type(void) {
+    TEST("parse pointer parameter");
+    ErrorList* err = errlist_create();
+    const char* src = "[ptr != 0][1]\n"
+                      "void write(int32_t* ptr, int32_t val) {\n"
+                      "    *ptr = val;\n"
+                      "}\n";
+    AstNode* root = parse_source(src, err);
+    assert(root != NULL && root->child_count == 1);
+    ast_free_tree(root);
+    errlist_destroy(err);
+    PASS();
+}
+
+static void test_struct_decl(void) {
+    TEST("parse struct with fields");
+    ErrorList* err = errlist_create();
+    const char* src = "struct Point {\n"
+                      "    int32_t x;\n"
+                      "    int32_t y;\n"
+                      "};\n";
+    AstNode* root = parse_source(src, err);
+    assert(root != NULL && root->child_count == 1);
+    assert(root->children[0]->kind == NODE_STRUCT_DECL);
+    ast_free_tree(root);
+    errlist_destroy(err);
+    PASS();
+
+    TEST("parse struct with name and fields");
+    ErrorList* err2 = errlist_create();
+    const char* src2 = "struct Point {\n"
+                       "    int32_t x;\n"
+                       "    int32_t y;\n"
+                       "};\n";
+    AstNode* root2 = parse_source(src2, err2);
+    assert(root2 != NULL && root2->child_count == 1);
+    assert(root2->children[0]->kind == NODE_STRUCT_DECL);
+    ast_free_tree(root2);
+    errlist_destroy(err2);
+    PASS();
+
+    TEST("parse struct with variable");
+    ErrorList* err3 = errlist_create();
+    const char* src3 = "struct { int32_t x; int32_t y; } point;\n";
+    AstNode* root3 = parse_source(src3, err3);
+    assert(root3 != NULL && root3->child_count == 1);
+    assert(root3->children[0]->kind == NODE_EXPR_STMT);
+    ast_free_tree(root3);
+    errlist_destroy(err3);
+    PASS();
+}
+
+static void test_union_decl(void) {
+    TEST("parse union with fields");
+    ErrorList* err = errlist_create();
+    const char* src = "union Data {\n"
+                      "    int32_t i;\n"
+                      "    float f;\n"
+                      "};\n";
+    AstNode* root = parse_source(src, err);
+    assert(root != NULL && root->child_count == 1);
+    assert(root->children[0]->kind == NODE_UNION_DECL);
+    ast_free_tree(root);
+    errlist_destroy(err);
+    PASS();
+}
+
+static void test_enum_decl(void) {
+    TEST("parse enum without values");
+    ErrorList* err = errlist_create();
+    const char* src = "enum Color {\n"
+                      "    RED,\n"
+                      "    GREEN,\n"
+                      "    BLUE\n"
+                      "};\n";
+    AstNode* root = parse_source(src, err);
+    assert(root != NULL && root->child_count == 1);
+    assert(root->children[0]->kind == NODE_ENUM_DECL);
+    ast_free_tree(root);
+    errlist_destroy(err);
+    PASS();
+
+    TEST("parse enum with values");
+    ErrorList* err2 = errlist_create();
+    const char* src2 = "enum Status {\n"
+                       "    OK = 0,\n"
+                       "    ERROR = -1\n"
+                       "};\n";
+    AstNode* root2 = parse_source(src2, err2);
+    assert(root2 != NULL && root2->child_count == 1);
+    assert(root2->children[0]->kind == NODE_ENUM_DECL);
+    ast_free_tree(root2);
+    errlist_destroy(err2);
+    PASS();
+}
+
+static void test_typedef(void) {
+    TEST("parse typedef");
+    ErrorList* err = errlist_create();
+    const char* src = "typedef int32_t myint;\n";
+    AstNode* root = parse_source(src, err);
+    assert(root != NULL && root->child_count == 1);
+    assert(root->children[0]->kind == NODE_TYPEDEF);
+    ast_free_tree(root);
+    errlist_destroy(err);
+    PASS();
+
+    TEST("parse struct typedef");
+    ErrorList* err2 = errlist_create();
+    const char* src2 = "typedef struct Point { int32_t x; int32_t y; } Point;\n";
+    AstNode* root2 = parse_source(src2, err2);
+    assert(root2 != NULL && root2->child_count == 1);
+    assert(root2->children[0]->kind == NODE_TYPEDEF);
+    ast_free_tree(root2);
+    errlist_destroy(err2);
+    PASS();
+}
+
+static void test_global_var(void) {
+    TEST("parse global variable");
+    ErrorList* err = errlist_create();
+    const char* src = "int32_t counter = 0;\n";
+    AstNode* root = parse_source(src, err);
+    assert(root != NULL && root->child_count == 1);
+    assert(root->children[0]->kind == NODE_EXPR_STMT);
+    ast_free_tree(root);
+    errlist_destroy(err);
+    PASS();
+
+    TEST("parse global array");
+    ErrorList* err2 = errlist_create();
+    const char* src2 = "int32_t buffer[256];\n";
+    AstNode* root2 = parse_source(src2, err2);
+    assert(root2 != NULL && root2->child_count == 1);
+    assert(root2->children[0]->kind == NODE_EXPR_STMT);
+    ast_free_tree(root2);
+    errlist_destroy(err2);
+    PASS();
+}
+
+int main(void) {
+    printf("\nC² Parser Unit Tests\n");
+    printf("====================\n\n");
+
+    test_empty_file();
+    test_simple_function();
+    test_func_no_contract();
+    test_contract_forms();
+    test_if_statement();
+    test_if_else();
+    test_while_statement();
+    test_for_statement();
+    test_derivation_block();
+    test_when_guard();
+    test_no_derive();
+    test_expressions();
+    test_pointer_type();
+    test_struct_decl();
+    test_union_decl();
+    test_enum_decl();
+    test_typedef();
+    test_global_var();
+
+    printf("\n%d/%d tests passed\n", tests_passed, tests_run);
+    return tests_passed == tests_run ? 0 : 1;
+}

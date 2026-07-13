@@ -125,7 +125,7 @@ Every modified file gets a header comment at the very top:
 Commit **after every single completed feature step** — never batch multiple logically separate changes into one commit.
 
 Before every commit:
-1. Verify the project compiles: `make build` (or `gcc -Wall -Wextra src/*.c -o build/c2 -lz3`)
+1. Verify the project compiles: `make build` (or `gcc -Wall -Wextra src/*.c -o build/c2c -lz3`)
 2. Run the test suite: `make test` or `make test-all`
 3. Run linting if available
 
