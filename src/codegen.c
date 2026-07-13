@@ -191,6 +191,15 @@ static void emit_node(Codegen* cg, AstNode* node) {
                     cg_printf(cg, "%.*s", (int)node->token.len, node->token.text);
                 } else {
                     emit_node(cg, node->children[0]);
+                    // Emit pointer stars from type node's pointer marker
+                    if (node->children[0]->kind == NODE_VARIABLE) {
+                        for (size_t ci = 0; ci < node->children[0]->child_count; ci++) {
+                            AstNode* pc = node->children[0]->children[ci];
+                            if (pc->kind == NODE_VARIABLE && pc->token.kind == TOK_STAR) {
+                                for (int pd = 0; pd < pc->flags; pd++) cg_putc(cg, '*');
+                            }
+                        }
+                    }
                     cg_putc(cg, ' ');
                     cg_printf(cg, "%.*s", (int)node->token.len, node->token.text);
                 }

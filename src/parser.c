@@ -73,6 +73,9 @@ AstNode* parser_parse(Parser* p) {
         AstNode* decl = parse_declaration(p);
         if (decl) {
             ast_add_child(root, decl);
+        } else if (check(p, TOK_RBRACE)) {
+            // } belongs to an enclosing scope — stop parsing at top level
+            break;
         } else {
             synchronize(p);
         }
@@ -1216,9 +1219,9 @@ static AstNode* parse_type(Parser* p) {
         }
     }
 
+    int pointer_depth = 0;
+
     if (is_struct_union_enum && check(p, TOK_IDENTIFIER)) {
-        // For `struct Foo`, keep `struct` as the keyword token and add `Foo` as a child
-        // (do NOT override type_tok)
         Token tag_tok = consume(p);
         AstNode* node = ast_alloc_node(NODE_VARIABLE, type_tok);
         AstNode* tag_node = ast_alloc_node(NODE_VARIABLE, tag_tok);
@@ -1227,7 +1230,15 @@ static AstNode* parse_type(Parser* p) {
         consumed_type_keyword = 1;
 
         while (match(p, TOK_STAR)) {
-            has_type_tok = 2; // marker: pointer to struct
+            pointer_depth++;
+        }
+
+        // Store pointer depth as second child if present
+        if (pointer_depth > 0) {
+            Token star_tok = { .kind = TOK_STAR, .loc = type_tok.loc };
+            AstNode* ptr_marker = ast_alloc_node(NODE_VARIABLE, star_tok);
+            ptr_marker->flags = pointer_depth;
+            ast_add_child(node, ptr_marker);
         }
 
         return node;
@@ -1239,11 +1250,18 @@ static AstNode* parse_type(Parser* p) {
     }
 
     while (match(p, TOK_STAR)) {
-        has_type_tok = 2; // marker: it's a pointer
+        pointer_depth++;
     }
 
     if (!has_type_tok) return NULL;
-    return ast_alloc_node(NODE_VARIABLE, type_tok);
+    AstNode* node = ast_alloc_node(NODE_VARIABLE, type_tok);
+    if (pointer_depth > 0) {
+        Token star_tok = { .kind = TOK_STAR, .loc = type_tok.loc };
+        AstNode* ptr_marker = ast_alloc_node(NODE_VARIABLE, star_tok);
+        ptr_marker->flags = pointer_depth;
+        ast_add_child(node, ptr_marker);
+    }
+    return node;
 }
 
 // ── Parser utilities ────────────────────────────────────────────────────
@@ -1288,7 +1306,7 @@ static void synchronize(Parser* p) {
             return;
         }
         if (check(p, TOK_RBRACE)) {
-            consume(p);
+            // Don't consume the closing brace — that belongs to the enclosing block
             return;
         }
         consume(p);

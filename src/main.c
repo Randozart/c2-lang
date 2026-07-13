@@ -9,6 +9,7 @@
 #include "lexer.h"
 #include "parser.h"
 #include "codegen.h"
+#include "typecheck.h"
 #include "verify.h"
 #include "error.h"
 
@@ -70,6 +71,18 @@ int main(int argc, char** argv) {
             free(source);
             errlist_destroy(errors);
             return 2;
+        }
+
+        // Type-check
+        int tc_errors = typecheck_ast(ast, errors);
+        if (errors->has_errors) {
+            errlist_print(errors);
+        }
+        if (tc_errors) {
+            ast_free_tree(ast);
+            free(source);
+            errlist_destroy(errors);
+            return 3;
         }
 
         // Codegen
@@ -140,6 +153,18 @@ int main(int argc, char** argv) {
             free(source);
             errlist_destroy(errors);
             return 2;
+        }
+
+        // Type-check
+        int tc_errors = typecheck_ast(ast, errors);
+        if (errors->has_errors) {
+            errlist_print(errors);
+        }
+        if (tc_errors) {
+            ast_free_tree(ast);
+            free(source);
+            errlist_destroy(errors);
+            return 3;
         }
 
         printf("c2: check passed for '%s'\n", input_file);

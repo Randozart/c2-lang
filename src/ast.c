@@ -2,6 +2,7 @@
 //   Implements the allocation, freeing, and traversal APIs declared in ast.h.
 
 #include "ast.h"
+#include "type.h"
 #include <stdlib.h>
 #include <string.h>
 #include <stdio.h>
@@ -28,6 +29,7 @@ AstNode* ast_alloc_node(NodeKind kind, Token token) {
 void ast_free_node(AstNode* node) {
     if (!node) return;
     free(node->children);
+    if (node->type) type_free(node->type);
     free(node);
 }
 
