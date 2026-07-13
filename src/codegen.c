@@ -378,6 +378,36 @@ static void emit_node(Codegen* cg, AstNode* node) {
             break;
         }
 
+        case NODE_SWITCH: {
+            emit_indent(cg);
+            cg_puts(cg, "switch (");
+            if (node->child_count > 0) emit_node(cg, node->children[0]);
+            cg_puts(cg, ") {");
+            cg->indent_level++;
+            cg_putc(cg, '\n');
+            for (size_t i = 1; i < node->child_count; i++) {
+                emit_node(cg, node->children[i]);
+            }
+            cg->indent_level--;
+            emit_indent(cg);
+            cg_puts(cg, "}\n");
+            break;
+        }
+
+        case NODE_CASE: {
+            emit_indent(cg);
+            cg_puts(cg, "case ");
+            if (node->child_count > 0) emit_node(cg, node->children[0]);
+            cg_puts(cg, ":\n");
+            break;
+        }
+
+        case NODE_DEFAULT: {
+            emit_indent(cg);
+            cg_puts(cg, "default:\n");
+            break;
+        }
+
         case NODE_DERIVATION: {
             // Emit derivation examples as comments
             for (size_t i = 0; i < node->child_count; i++) {

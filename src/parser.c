@@ -704,6 +704,44 @@ static AstNode* parse_statement(Parser* p) {
         return node;
     }
 
+    // case expr:
+    if (match(p, TOK_CASE)) {
+        Token case_tok = peek(p);
+        AstNode* expr = parse_expr(p);
+        expect(p, TOK_COLON);
+        AstNode* node = ast_alloc_node(NODE_CASE, case_tok);
+        if (expr) ast_add_child(node, expr);
+        return node;
+    }
+
+    // default:
+    if (match(p, TOK_DEFAULT)) {
+        expect(p, TOK_COLON);
+        return ast_alloc_node(NODE_DEFAULT, peek(p));
+    }
+
+    // switch (expr) { ... }
+    if (match(p, TOK_SWITCH)) {
+        expect(p, TOK_LPAREN);
+        AstNode* cond = parse_expr(p);
+        expect(p, TOK_RPAREN);
+        if (check(p, TOK_LBRACE)) {
+            Token sw_tok = cond ? cond->token : peek(p);
+            consume(p); // {
+            AstNode* node = ast_alloc_node(NODE_SWITCH, sw_tok);
+            if (cond) ast_add_child(node, cond);
+            while (!check(p, TOK_RBRACE) && !check(p, TOK_EOF)) {
+                AstNode* stmt = parse_statement(p);
+                if (stmt) ast_add_child(node, stmt);
+            }
+            expect(p, TOK_RBRACE);
+            return node;
+        }
+        errlist_add(p->errors, ERROR_LEVEL_ERROR, peek(p).loc,
+            "switch body must be a block { ... }");
+        return NULL;
+    }
+
     // goto is deliberately excluded from C²
     if (match(p, TOK_GOTO)) {
         errlist_add(p->errors, ERROR_LEVEL_ERROR, peek(p).loc,

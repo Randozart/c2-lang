@@ -267,6 +267,27 @@ static void test_emit_typedef(void) {
     PASS();
 }
 
+static void test_emit_switch(void) {
+    TEST("emit switch with case and default");
+    ErrorList* err = errlist_create();
+    const char* src = "[1][1]\n"
+                      "int32_t f(int32_t x) {\n"
+                      "    switch (x) {\n"
+                      "    case 0:\n"
+                      "        return 10;\n"
+                      "    default:\n"
+                      "        return -1;\n"
+                      "    }\n"
+                      "}\n";
+    const char* out = transpile(src, err);
+    assert(out != NULL);
+    assert(strstr(out, "switch (x)") != NULL);
+    assert(strstr(out, "case 0:") != NULL);
+    assert(strstr(out, "default:") != NULL);
+    errlist_destroy(err);
+    PASS();
+}
+
 static void test_emit_global_var(void) {
     TEST("emit global variable");
     ErrorList* err = errlist_create();
@@ -304,6 +325,7 @@ int main(void) {
     test_emit_struct();
     test_emit_enum();
     test_emit_typedef();
+    test_emit_switch();
     test_emit_global_var();
 
     printf("\n%d/%d tests passed\n", tests_passed, tests_run);

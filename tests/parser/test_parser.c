@@ -396,6 +396,64 @@ static void test_typedef(void) {
     PASS();
 }
 
+static void test_switch_basic(void) {
+    TEST("parse switch with case and default");
+    ErrorList* err = errlist_create();
+    const char* src = "[1][1]\n"
+                      "int32_t f(int32_t x) {\n"
+                      "    switch (x) {\n"
+                      "    case 0:\n"
+                      "        return 10;\n"
+                      "    case 1:\n"
+                      "        return 20;\n"
+                      "    default:\n"
+                      "        return -1;\n"
+                      "    }\n"
+                      "}\n";
+    AstNode* root = parse_source(src, err);
+    assert(root != NULL && root->child_count == 1);
+    AstNode* func = root->children[0];
+    assert(func->kind == NODE_FUNCTION);
+    // Function: [0]=ret_type, [1]=pre, [2]=post, [3]=params, [4]=body
+    AstNode* body = func->children[4];
+    assert(body->kind == NODE_BLOCK);
+    assert(body->child_count == 1);
+    assert(body->children[0]->kind == NODE_SWITCH);
+    ast_free_tree(root);
+    errlist_destroy(err);
+    PASS();
+
+    TEST("parse switch with empty body");
+    ErrorList* err2 = errlist_create();
+    const char* src2 = "[1][1]\n"
+                       "void f(void) {\n"
+                       "    switch (0) {}\n"
+                       "}\n";
+    AstNode* root2 = parse_source(src2, err2);
+    assert(root2 != NULL);
+    ast_free_tree(root2);
+    errlist_destroy(err2);
+    PASS();
+
+    TEST("parse switch with fall-through");
+    ErrorList* err3 = errlist_create();
+    const char* src3 = "[1][1]\n"
+                       "void f(int32_t x) {\n"
+                       "    switch (x) {\n"
+                       "    case 0:\n"
+                       "        foo();\n"
+                       "    case 1:\n"
+                       "        bar();\n"
+                       "        break;\n"
+                       "    }\n"
+                       "}\n";
+    AstNode* root3 = parse_source(src3, err3);
+    assert(root3 != NULL);
+    ast_free_tree(root3);
+    errlist_destroy(err3);
+    PASS();
+}
+
 static void test_global_var(void) {
     TEST("parse global variable");
     ErrorList* err = errlist_create();
@@ -441,6 +499,7 @@ int main(void) {
     test_union_decl();
     test_enum_decl();
     test_typedef();
+    test_switch_basic();
     test_global_var();
 
     printf("\n%d/%d tests passed\n", tests_passed, tests_run);
