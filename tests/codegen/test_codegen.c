@@ -93,22 +93,34 @@ static void test_emit_function_call(void) {
     PASS();
 }
 
-static void test_emit_if_else(void) {
-    TEST("emit if-else statement");
+static void test_emit_when(void) {
+    TEST("emit when guard as if");
     ErrorList* err = errlist_create();
     const char* src = "[1][1]\n"
                       "int32_t abs(int32_t x) {\n"
-                      "    if (x < 0) {\n"
-                      "        return -x;\n"
-                      "    } else {\n"
-                      "        return x;\n"
-                      "    }\n"
+                      "    when x < 0 -> return -x;\n"
+                      "    return x;\n"
                       "}\n";
     const char* out = transpile(src, err);
     assert(out != NULL);
+    // when desugars to if in emitted C
     assert(strstr(out, "if") != NULL);
-    assert(strstr(out, "else") != NULL);
     errlist_destroy(err);
+    PASS();
+
+    TEST("emit when block");
+    ErrorList* err2 = errlist_create();
+    const char* src2 = "[1][1]\n"
+                       "int32_t test(int32_t x) {\n"
+                       "    when x > 0 {\n"
+                       "        return 1;\n"
+                       "    }\n"
+                       "    return 0;\n"
+                       "}\n";
+    const char* out2 = transpile(src2, err2);
+    assert(out2 != NULL);
+    assert(strstr(out2, "if") != NULL);
+    errlist_destroy(err2);
     PASS();
 }
 
@@ -282,7 +294,7 @@ int main(void) {
     test_emit_empty();
     test_emit_function();
     test_emit_function_call();
-    test_emit_if_else();
+    test_emit_when();
     test_emit_while();
     test_emit_for();
     test_emit_pointer();

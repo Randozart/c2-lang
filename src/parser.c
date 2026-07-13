@@ -604,25 +604,40 @@ static AstNode* parse_statement(Parser* p) {
         return ast_make_when(cond, stmt, when_tok.loc);
     }
 
-    // if (expr) stmt [else stmt]
+    // if/else are deliberately excluded from C² — use `when`
     if (match(p, TOK_IF)) {
-        expect(p, TOK_LPAREN);
-        AstNode* cond = parse_expr(p);
-        expect(p, TOK_RPAREN);
-        AstNode* then_stmt = parse_statement(p);
-        AstNode* else_stmt = NULL;
-        if (match(p, TOK_ELSE)) {
-            else_stmt = parse_statement(p);
+        errlist_add(p->errors, ERROR_LEVEL_ERROR, peek(p).loc,
+            "`if` is not a C² construct.\n"
+            "  Use `when` instead:\n"
+            "    when condition -> expression;    // single expression (arrow)\n"
+            "    when condition { statements }    // block body (braces)\n"
+            "  Use sequential `when` guards in place of if/else chains:\n"
+            "    when x > 0 -> positive();\n"
+            "    when x < 0 -> negative();");
+        // Recover: skip past the if (...) body
+        if (match(p, TOK_LPAREN)) {
+            int depth = 1;
+            while (depth > 0 && !check(p, TOK_EOF)) {
+                if (match(p, TOK_LPAREN)) depth++;
+                else if (match(p, TOK_RPAREN)) depth--;
+                else consume(p);
+            }
         }
-        AstNode* node = ast_alloc_node(NODE_IF, cond ? cond->token : peek(p));
-        if (cond) ast_add_child(node, cond);
-        if (then_stmt) ast_add_child(node, then_stmt);
-        if (else_stmt) {
-            AstNode* else_node = ast_alloc_node(NODE_ELSE, else_stmt->token);
-            ast_add_child(else_node, else_stmt);
-            ast_add_child(node, else_node);
-        }
-        return node;
+        while (!check(p, TOK_SEMI) && !check(p, TOK_RBRACE) && !check(p, TOK_EOF))
+            consume(p);
+        if (check(p, TOK_SEMI)) consume(p);
+        return NULL;
+    }
+    if (match(p, TOK_ELSE)) {
+        errlist_add(p->errors, ERROR_LEVEL_ERROR, peek(p).loc,
+            "`else` without a matching `when` — use sequential `when` guards:\n"
+            "    when x -> A;\n"
+            "    when !x -> B;");
+        // Recover: skip this else's statement
+        while (!check(p, TOK_SEMI) && !check(p, TOK_RBRACE) && !check(p, TOK_RBRACK) && !check(p, TOK_EOF))
+            consume(p);
+        if (check(p, TOK_SEMI)) consume(p);
+        return NULL;
     }
 
     // while (expr) stmt
@@ -687,6 +702,21 @@ static AstNode* parse_statement(Parser* p) {
         AstNode* node = ast_alloc_node(NODE_CONTINUE, peek(p));
         expect(p, TOK_SEMI);
         return node;
+    }
+
+    // goto is deliberately excluded from C²
+    if (match(p, TOK_GOTO)) {
+        errlist_add(p->errors, ERROR_LEVEL_ERROR, peek(p).loc,
+            "`goto` is not a C² construct.\n"
+            "  C² enforces flat control flow. Use instead:\n"
+            "    when guards for conditional branching\n"
+            "    break/continue for loop control\n"
+            "  For complex state machines, import a regular C file.");
+        // Recover: consume 'goto label;'
+        while (!check(p, TOK_SEMI) && !check(p, TOK_RBRACE) && !check(p, TOK_EOF))
+            consume(p);
+        if (check(p, TOK_SEMI)) consume(p);
+        return NULL;
     }
 
     // ; (empty statement)

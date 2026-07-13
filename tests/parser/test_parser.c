@@ -106,12 +106,27 @@ static void test_contract_forms(void) {
     PASS();
 }
 
-static void test_if_statement(void) {
-    TEST("parse if statement");
+static void test_when_guard(void) {
+    TEST("parse when guard (arrow form)");
+    ErrorList* err = errlist_create();
+    const char* src = "[x != 0][1]\n"
+                      "int32_t div10(int32_t x) {\n"
+                      "    when x > 0 -> return x / 10;\n"
+                      "    return x / 10;\n"
+                      "}\n";
+    AstNode* root = parse_source(src, err);
+    assert(root != NULL && root->child_count == 1);
+    ast_free_tree(root);
+    errlist_destroy(err);
+    PASS();
+}
+
+static void test_when_block(void) {
+    TEST("parse when guard (block form)");
     ErrorList* err = errlist_create();
     const char* src = "[x >= 0][result == x]\n"
                       "int32_t abs(int32_t x) {\n"
-                      "    if (x < 0) {\n"
+                      "    when x < 0 {\n"
                       "        return -x;\n"
                       "    }\n"
                       "    return x;\n"
@@ -124,19 +139,46 @@ static void test_if_statement(void) {
     PASS();
 }
 
-static void test_if_else(void) {
-    TEST("parse if-else statement");
+static void test_when_seq(void) {
+    TEST("parse sequential when guards");
     ErrorList* err = errlist_create();
     const char* src = "[1][1]\n"
-                      "int32_t test(int32_t x) {\n"
-                      "    if (x > 0) {\n"
-                      "        return 1;\n"
-                      "    } else {\n"
-                      "        return 0;\n"
-                      "    }\n"
+                      "int32_t sign(int32_t x) {\n"
+                      "    when x > 0 -> return 1;\n"
+                      "    when x < 0 -> return -1;\n"
+                      "    return 0;\n"
                       "}\n";
     AstNode* root = parse_source(src, err);
     assert(root != NULL && root->child_count == 1);
+    ast_free_tree(root);
+    errlist_destroy(err);
+    PASS();
+}
+
+static void test_if_blocked(void) {
+    TEST("if keyword produces error");
+    ErrorList* err = errlist_create();
+    const char* src = "[1][1]\n"
+                      "int32_t test(int32_t x) {\n"
+                      "    if (x > 0) { return 1; }\n"
+                      "}\n";
+    AstNode* root = parse_source(src, err);
+    // Should have errors about if not being a C² construct
+    assert(errlist_count(err) > 0 || err->has_errors);
+    ast_free_tree(root);
+    errlist_destroy(err);
+    PASS();
+}
+
+static void test_goto_blocked(void) {
+    TEST("goto keyword produces error");
+    ErrorList* err = errlist_create();
+    const char* src = "[1][1]\n"
+                      "void test(void) {\n"
+                      "    goto cleanup;\n"
+                      "}\n";
+    AstNode* root = parse_source(src, err);
+    assert(errlist_count(err) > 0 || err->has_errors);
     ast_free_tree(root);
     errlist_destroy(err);
     PASS();
@@ -191,21 +233,6 @@ static void test_derivation_block(void) {
     AstNode* root = parse_source(src, err);
     assert(root != NULL && root->child_count == 1);
     assert(root->children[0]->kind == NODE_FUNCTION);
-    ast_free_tree(root);
-    errlist_destroy(err);
-    PASS();
-}
-
-static void test_when_guard(void) {
-    TEST("parse when guard in function body");
-    ErrorList* err = errlist_create();
-    const char* src = "[x != 0][1]\n"
-                      "int32_t div10(int32_t x) {\n"
-                      "    when x > 0 -> return x / 10;\n"
-                      "    return x / 10;\n"
-                      "}\n";
-    AstNode* root = parse_source(src, err);
-    assert(root != NULL && root->child_count == 1);
     ast_free_tree(root);
     errlist_destroy(err);
     PASS();
@@ -399,12 +426,14 @@ int main(void) {
     test_simple_function();
     test_func_no_contract();
     test_contract_forms();
-    test_if_statement();
-    test_if_else();
+    test_when_guard();
+    test_when_block();
+    test_when_seq();
+    test_if_blocked();
+    test_goto_blocked();
     test_while_statement();
     test_for_statement();
     test_derivation_block();
-    test_when_guard();
     test_no_derive();
     test_expressions();
     test_pointer_type();

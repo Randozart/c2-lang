@@ -147,6 +147,8 @@ The special identifier `result` in a postcondition position refers to the functi
 
 A `when` statement is a single-branch runtime guard that executes its effect *only* if the condition is true. It accepts no `else` block.
 
+> **Design note:** C² deliberately excludes C's `if`/`else` and `goto` statements. All conditional branching uses `when`, which is both safer (no dangling-else ambiguity) and simpler (single branch, no fall-through). The `when` construct is desugared to `if` in emitted C code. If you type `if` or `goto` in C² source, the compiler produces an error with recovery and suggests the canonical `when` form.
+
 #### Syntax
 
 ```
@@ -165,7 +167,7 @@ when denom == 0 {
 };
 ```
 
-`when` is desugared to a standard `if` in the emitted C code.
+`when` is desugared to a standard `if` in the emitted C code (without dangling-else ambiguity, since `when` has no `else` clause).
 
 ### 2.3 Ownership Modifiers (`borrow`, `own`)
 
@@ -269,7 +271,7 @@ PreClause          ::= "[" [Expression] "]" ;
 PostClause         ::= "[" [Expression] "]" ;
                     (* Constraint: not (PreClause.Expr omitted AND PostClause absent) *)
 
-(* Guards *)
+(* Guards — exclusive conditional construct; C's if/else and goto are NOT part of C² *)
 GuardStmt          ::= "when" Expression "->" Statement ";"
                      | "when" Expression "{" { Statement } "}" ";" ;
 
@@ -290,7 +292,8 @@ FunctionSignature  ::= Type Name "(" ParamList ")" ;
 Body               ::= "{" { Statement } "}" ;
 Type               ::= (standard C type syntax) ;
 Expression          ::= (standard C expression syntax) ;
-Statement          ::= (standard C statement syntax) ;
+Statement          ::= (standard C statement syntax, **excluding `if`/`else`/`goto`**;
+                      use `when` for conditional branching) ;
 ```
 
 ---
