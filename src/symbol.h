@@ -55,6 +55,7 @@ struct Scope {
 typedef struct {
     Scope* current;
     Scope* global;
+    Scope* dead_scopes; // Popped scopes kept alive for node->symbol refs
     size_t num_scopes;
 } SymbolTable;
 

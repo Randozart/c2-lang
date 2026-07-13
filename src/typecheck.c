@@ -1,4 +1,5 @@
 // 2026-07-13 — Type checker pass for C².
+#include "state.h"
 //   Walks the AST, annotates every expression node with its Type*,
 //   and validates type correctness per C23 rules + C² extensions.
 
@@ -836,7 +837,9 @@ static void tc_node(AstNode* node, TCContext* ctx) {
                     }
                 }
 
-                symtab_insert(ctx->symtab, pname, ptype, param->token.loc);
+                Symbol* psym = symtab_insert(ctx->symtab, pname, ptype, param->token.loc);
+                // Parameters start OWNED (caller provides the value)
+                if (psym) psym->state = STATE_OWNED;
             }
         }
 

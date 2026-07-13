@@ -11,6 +11,8 @@
 #include "codegen.h"
 #include "typecheck.h"
 #include "vrp.h"
+#include "borrow.h"
+#include "drop.h"
 #include "verify.h"
 #include "verifier.h"
 #include "error.h"
@@ -91,6 +93,13 @@ int main(int argc, char** argv) {
 
         // Value Range Propagation
         vrp_run(ast, symtab, errors);
+
+        // Borrow checker
+        borrow_check(ast, symtab, errors);
+
+        // Drop injection (mutates AST — inserts NODE_DROP_CALL)
+        drop_inject(ast, symtab, errors);
+
         symtab_destroy(symtab);
 
         // Codegen
@@ -182,6 +191,13 @@ int main(int argc, char** argv) {
 
         // Value Range Propagation
         vrp_run(ast, symtab, errors);
+
+        // Borrow checker
+        borrow_check(ast, symtab, errors);
+
+        // Drop injection
+        drop_inject(ast, symtab, errors);
+
         symtab_destroy(symtab);
 
         // Z3 contract verification

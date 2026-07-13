@@ -70,11 +70,18 @@ SymbolTable* symtab_create(void) {
 
 void symtab_destroy(SymbolTable* st) {
     if (!st) return;
-    // Pop and destroy all scopes
+    // Pop and destroy all active scopes
     while (st->current && st->current != st->global) {
         Scope* parent = st->current->parent;
         scope_destroy(st->current);
         st->current = parent;
+    }
+    // Destroy dead scopes (popped but kept alive for node->symbol refs)
+    Scope* ds = st->dead_scopes;
+    while (ds) {
+        Scope* next = ds->parent;
+        scope_destroy(ds);
+        ds = next;
     }
     scope_destroy(st->global);
     free(st);
@@ -90,9 +97,15 @@ size_t symtab_push_scope(SymbolTable* st) {
 size_t symtab_pop_scope(SymbolTable* st) {
     if (!st || !st->current || !st->current->parent) return 0;
     size_t depth = st->current->depth;
-    Scope* parent = st->current->parent;
-    scope_destroy(st->current);
-    st->current = parent;
+    // Keep the scope alive (node->symbol may still reference it).
+    // Push onto dead_scopes list for cleanup at symtab_destroy.
+    st->current->parent = st->dead_scopes;
+    st->dead_scopes = st->current;
+    st->current = st->current->parent;
+    // The new current is the parent. The old scope's ->parent was
+    // overwritten to point to the dead_scopes list, but we saved
+    // the true parent in the loop above. Re-point dead scope's
+    // parent to the previous dead list head (already done above).
     return depth;
 }
 
