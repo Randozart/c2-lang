@@ -89,10 +89,14 @@ static void emit_node(Codegen* cg, AstNode* node) {
                 }
             }
 
-            // Function signature
-            // Return type is first child if it's a type node
-            // For now, just emit based on the token
-            cg_printf(cg, "int32_t %s(", node->token.text);
+            // Return type (first child, always present)
+            if (node->child_count > 0) {
+                emit_node(cg, node->children[0]);
+                cg_putc(cg, ' ');
+            }
+
+            // Function name
+            cg_printf(cg, "%.*s(", (int)node->token.len, node->token.text);
 
             // Parameters
             for (size_t i = 0; i < node->child_count; i++) {
@@ -129,32 +133,44 @@ static void emit_node(Codegen* cg, AstNode* node) {
             break;
 
         case NODE_DECL: {
-            // Check for borrow/own
-            int is_borrow = 0;
-            int is_own = 0;
-            for (size_t i = 0; i < node->child_count; i++) {
-                if (node->children[i]->kind == NODE_BORROW_PARAM) is_borrow = 1;
-                if (node->children[i]->kind == NODE_OWN_PARAM) is_own = 1;
+            // Type (first child)
+            if (node->child_count > 0) {
+                emit_node(cg, node->children[0]);
+                cg_putc(cg, ' ');
             }
-            // Emit type (simplified: just "int32_t" or type from token)
-            cg_printf(cg, "int32_t %s", node->token.text);
-            if (is_borrow) cg_puts(cg, " const*");
-            if (is_own) cg_puts(cg, "*");
+            // Variable/param name
+            cg_printf(cg, "%.*s", (int)node->token.len, node->token.text);
+            // Children after type: array size, initializer, borrow/own
+            for (size_t i = 1; i < node->child_count; i++) {
+                AstNode* child = node->children[i];
+                if (child->kind == NODE_BORROW_PARAM) {
+                    cg_puts(cg, " const*");
+                } else if (child->kind == NODE_OWN_PARAM) {
+                    cg_puts(cg, "*");
+                } else if (child->kind == NODE_LITERAL_INT || child->kind == NODE_VARIABLE ||
+                           child->kind == NODE_BINARY_OP) {
+                    cg_putc(cg, '[');
+                    emit_node(cg, child);
+                    cg_putc(cg, ']');
+                } else {
+                    cg_puts(cg, " = ");
+                    emit_node(cg, child);
+                }
+            }
             break;
         }
 
         case NODE_BLOCK: {
             cg_putc(cg, '{');
             cg->indent_level++;
-
+            if (node->child_count > 0) cg_putc(cg, '\n');
             for (size_t i = 0; i < node->child_count; i++) {
-                AstNode* stmt = node->children[i];
-                emit_node(cg, stmt);
+                emit_node(cg, node->children[i]);
             }
-
             cg->indent_level--;
-            cg_putc(cg, '\n');
-            emit_indent(cg);
+            if (node->child_count > 0) {
+                emit_indent(cg);
+            }
             cg_putc(cg, '}');
             break;
         }
@@ -181,7 +197,7 @@ static void emit_node(Codegen* cg, AstNode* node) {
             }
             cg->indent_level--;
             emit_indent(cg);
-            cg_puts(cg, "}");
+            cg_puts(cg, "}\n");
             break;
         }
 
@@ -205,7 +221,7 @@ static void emit_node(Codegen* cg, AstNode* node) {
             cg->indent_level--;
             cg_putc(cg, '\n');
             emit_indent(cg);
-            cg_puts(cg, "}");
+            cg_puts(cg, "}\n");
 
             // Check for else
             for (size_t i = 0; i < node->child_count; i++) {
@@ -229,7 +245,6 @@ static void emit_node(Codegen* cg, AstNode* node) {
                     cg_puts(cg, "}");
                 }
             }
-            cg_putc(cg, '\n');
             break;
         }
 
@@ -283,6 +298,13 @@ static void emit_node(Codegen* cg, AstNode* node) {
             emit_indent(cg);
             cg_puts(cg, "}");
             cg_putc(cg, '\n');
+            break;
+        }
+
+        case NODE_EXPR_STMT: {
+            emit_indent(cg);
+            if (node->child_count > 0) emit_node(cg, node->children[0]);
+            cg_puts(cg, ";\n");
             break;
         }
 
@@ -440,12 +462,12 @@ static void emit_node(Codegen* cg, AstNode* node) {
         }
 
         case NODE_LITERAL_STR: {
-            cg_printf(cg, "\"%.*s\"", (int)node->token.len, node->token.text);
+            cg_printf(cg, "%.*s", (int)node->token.len, node->token.text);
             break;
         }
 
         case NODE_LITERAL_CHAR: {
-            cg_printf(cg, "'%.*s'", (int)node->token.len, node->token.text);
+            cg_printf(cg, "%.*s", (int)node->token.len, node->token.text);
             break;
         }
 

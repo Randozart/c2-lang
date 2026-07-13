@@ -132,8 +132,7 @@ static AstNode* parse_declaration(Parser* p) {
         // Check for derivation block := { ... }
         if (match(p, TOK_DERIVE)) {
             AstNode* deriv = parse_derivation_block(p);
-            AstNode* func = ast_make_function(
-                name_tok.text, params, NULL, pre, post, deriv, name_tok.loc);
+            AstNode* func = ast_make_function(name_tok, type, params, NULL, pre, post, deriv);
             if (has_no_derive) {
                 AstNode* nd = ast_alloc_node(NODE_NO_DERIVE, name_tok);
                 ast_add_child(func, nd);
@@ -160,8 +159,7 @@ static AstNode* parse_declaration(Parser* p) {
                         (int)name_tok.len, name_tok.text);
         }
 
-        AstNode* func = ast_make_function(
-            name_tok.text, params, body, pre, post, deriv, name_tok.loc);
+        AstNode* func = ast_make_function(name_tok, type, params, body, pre, post, deriv);
         if (has_no_derive) {
             AstNode* nd = ast_alloc_node(NODE_NO_DERIVE, name_tok);
             ast_add_child(func, nd);
@@ -466,7 +464,9 @@ static AstNode* parse_statement(Parser* p) {
             }
 
             expect(p, TOK_SEMI);
-            return decl;
+            AstNode* stmt = ast_alloc_node(NODE_EXPR_STMT, decl->token);
+            ast_add_child(stmt, decl);
+            return stmt;
         }
         // parse_type consumed some tokens but it wasn't a declaration —
         // fall through to expression parsing with whatever's left
@@ -476,6 +476,9 @@ static AstNode* parse_statement(Parser* p) {
     AstNode* expr = parse_expr(p);
     if (expr) {
         expect(p, TOK_SEMI);
+        AstNode* stmt = ast_alloc_node(NODE_EXPR_STMT, expr->token);
+        ast_add_child(stmt, expr);
+        return stmt;
     }
     return expr;
 }
@@ -740,7 +743,7 @@ static AstNode* parse_postfix(Parser* p) {
             if (name.kind != TOK_ERROR) {
                 AstNode* node = ast_alloc_node(NODE_MEMBER, left->token);
                 ast_add_child(node, left);
-                AstNode* member = ast_make_variable(name.text, name.loc);
+                AstNode* member = ast_make_variable(name);
                 ast_add_child(node, member);
                 left = node;
             }
@@ -754,7 +757,7 @@ static AstNode* parse_postfix(Parser* p) {
             if (name.kind != TOK_ERROR) {
                 AstNode* node = ast_alloc_node(NODE_DEREF, left->token);
                 ast_add_child(node, left);
-                AstNode* member = ast_make_variable(name.text, name.loc);
+                AstNode* member = ast_make_variable(name);
                 ast_add_child(node, member);
                 left = node;
             }
@@ -801,7 +804,7 @@ static AstNode* parse_primary(Parser* p) {
     if (check(p, TOK_IDENTIFIER)) {
         Token t = consume(p);
         // Check if followed by '(' — handled in postfix
-        return ast_make_variable(t.text, t.loc);
+        return ast_make_variable(t);
     }
 
     // Handle unary & and * in primary (they're actually in unary, but this
@@ -844,15 +847,19 @@ static AstNode* parse_type(Parser* p) {
     // Track whether we consumed at least one — if we did, an identifier
     // after them is the declaration name, not the type name.
     int consumed_type_keyword = 0;
+    Token type_tok;
+    int has_type_tok = 0;
     while (is_type_token(p->lexer.current_tok.kind)) {
-        consume(p);
+        type_tok = consume(p);
         consumed_type_keyword = 1;
+        has_type_tok = 1;
     }
 
     // If no type keyword was consumed, the current identifier IS the type name
     // (e.g. typedef'd types like int32_t). Consume it.
     if (!consumed_type_keyword && check(p, TOK_IDENTIFIER)) {
-        consume(p);
+        type_tok = consume(p);
+        has_type_tok = 1;
     }
 
     // Check for pointer stars
@@ -860,8 +867,9 @@ static AstNode* parse_type(Parser* p) {
         // Pointer type
     }
 
-    // Return a dummy node to indicate we parsed a type
-    return ast_alloc_node(NODE_DECL, peek(p));
+    // Return a node to indicate we parsed a type
+    if (!has_type_tok) return NULL;
+    return ast_alloc_node(NODE_VARIABLE, type_tok);
 }
 
 // ── Parser utilities ────────────────────────────────────────────────────

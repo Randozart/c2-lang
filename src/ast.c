@@ -66,14 +66,8 @@ AstNode* ast_make_literal_int(int64_t value, SourceLoc loc) {
     return node;
 }
 
-AstNode* ast_make_variable(const char* name, SourceLoc loc) {
-    Token t;
-    memset(&t, 0, sizeof(t));
-    t.kind = TOK_IDENTIFIER;
-    t.loc = loc;
-    t.text = name;
-    t.len = strlen(name);
-    AstNode* node = ast_alloc_node(NODE_VARIABLE, t);
+AstNode* ast_make_variable(Token name_tok) {
+    AstNode* node = ast_alloc_node(NODE_VARIABLE, name_tok);
     return node;
 }
 
@@ -88,16 +82,12 @@ AstNode* ast_make_binary_op(int op_kind, AstNode* left, AstNode* right, SourceLo
     return node;
 }
 
-AstNode* ast_make_function(const char* name, AstNode* params, AstNode* body,
-                           AstNode* pre, AstNode* post, AstNode* deriv, SourceLoc loc) {
-    Token t;
-    memset(&t, 0, sizeof(t));
-    t.kind = TOK_IDENTIFIER;
-    t.loc = loc;
-    t.text = name;
-    t.len = strlen(name);
-    AstNode* node = ast_alloc_node(NODE_FUNCTION, t);
+AstNode* ast_make_function(Token name_tok, AstNode* ret_type,
+                           AstNode* params, AstNode* body,
+                           AstNode* pre, AstNode* post, AstNode* deriv) {
+    AstNode* node = ast_alloc_node(NODE_FUNCTION, name_tok);
 
+    if (ret_type) ast_add_child(node, ret_type);
     if (pre) {
         AstNode* pre_node = ast_alloc_node(NODE_CONTRACT_PRE, pre->token);
         ast_add_child(pre_node, pre);

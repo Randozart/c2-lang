@@ -62,6 +62,7 @@ typedef enum {
     NODE_EXTERN,
     NODE_STATIC_ASSERT,
     NODE_TRANSLATION_UNIT,
+    NODE_EXPR_STMT,          // Expression used as statement (wraps an expr + ;)
     NODE_DROP_CALL,          // Injected by drop pass (not in source)
     NODE_PP_INCLUDE,         // Preprocessor #include
     NODE_PP_DEFINE,          // Preprocessor #define
@@ -100,10 +101,11 @@ void     ast_free_tree(AstNode* root);
 // ── Convenience constructors ────────────────────────────────────────────
 
 AstNode* ast_make_literal_int(int64_t value, SourceLoc loc);
-AstNode* ast_make_variable(const char* name, SourceLoc loc);
+AstNode* ast_make_variable(Token name_tok);
 AstNode* ast_make_binary_op(int op_kind, AstNode* left, AstNode* right, SourceLoc loc);
-AstNode* ast_make_function(const char* name, AstNode* params, AstNode* body,
-                           AstNode* pre, AstNode* post, AstNode* deriv, SourceLoc loc);
+AstNode* ast_make_function(Token name_tok, AstNode* ret_type,
+                           AstNode* params, AstNode* body,
+                           AstNode* pre, AstNode* post, AstNode* deriv);
 AstNode* ast_make_block(SourceLoc loc);
 AstNode* ast_make_when(AstNode* cond, AstNode* stmt, SourceLoc loc);
 
