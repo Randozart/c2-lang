@@ -418,11 +418,13 @@ static void tc_node(AstNode* node, TCContext* ctx) {
         }
 
         // Register the variable in the symbol table
+        // The variable name is stored in the NODE_DECL's own token,
+        // NOT in children[1] (which may be the init expression or absent).
         char varname[256];
-        int vname_len = (int)node->children[1]->token.len;
+        int vname_len = (int)node->token.len;
         if (vname_len > 255) vname_len = 255;
         snprintf(varname, sizeof(varname), "%.*s", vname_len,
-                 node->children[1]->token.text);
+                 node->token.text);
 
         Symbol* existing = symtab_lookup_current(ctx->symtab, varname);
         if (existing) {

@@ -1,0 +1,15 @@
+// Factorial — tests for loops and arithmetic
+[1][1]
+int32_t factorial(int32_t n) {
+    int32_t r = 1;
+    for (int32_t i = 2; i <= n; i++) {
+        r = r * i;
+    }
+    return r;
+}
+
+[[result == 0]
+int32_t main(void) {
+    // 5! = 120
+    return factorial(5) - 120;
+}

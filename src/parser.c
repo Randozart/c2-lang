@@ -692,8 +692,32 @@ static AstNode* parse_statement(Parser* p) {
         AstNode* node = ast_alloc_node(NODE_FOR, peek(p));
         // init (expression or declaration)
         if (!check(p, TOK_SEMI)) {
-            AstNode* init = parse_expr(p);
-            if (init) ast_add_child(node, init);
+            // Check if it looks like a declaration (type token + identifier)
+            int could_be_decl = 0;
+            if (is_type_token(p->lexer.current_tok.kind) || check(p, TOK_IDENTIFIER)) {
+                Token nxt = peek(p);
+                if (nxt.kind == TOK_IDENTIFIER || nxt.kind == TOK_STAR) {
+                    could_be_decl = 1;
+                }
+            }
+            if (could_be_decl) {
+                AstNode* vtype = parse_type(p);
+                if (vtype && check(p, TOK_IDENTIFIER)) {
+                    Token name = consume(p);
+                    AstNode* decl = ast_alloc_node(NODE_DECL, name);
+                    ast_add_child(decl, vtype);
+                    if (match(p, TOK_ASSIGN)) {
+                        AstNode* init_expr = parse_expr(p);
+                        if (init_expr) ast_add_child(decl, init_expr);
+                    }
+                    ast_add_child(node, decl);
+                } else {
+                    if (vtype) ast_add_child(node, vtype);
+                }
+            } else {
+                AstNode* init = parse_expr(p);
+                if (init) ast_add_child(node, init);
+            }
         }
         expect(p, TOK_SEMI);
         // condition
@@ -1124,8 +1148,9 @@ static AstNode* parse_postfix(Parser* p) {
                 ast_add_child(node, member);
                 left = node;
             }
-        } else if (match(p, TOK_INC) || match(p, TOK_DEC)) {
-            AstNode* node = ast_alloc_node(NODE_UNARY_OP, left->token);
+        } else if (check(p, TOK_INC) || check(p, TOK_DEC)) {
+            Token op_tok = consume(p); // consume ++ or --
+            AstNode* node = ast_alloc_node(NODE_UNARY_OP, op_tok);
             ast_add_child(node, left);
             left = node;
         } else {

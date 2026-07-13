@@ -109,8 +109,8 @@ static void borrow_walk(AstNode* node, SymbolTable* symtab, ErrorList* errors) {
             int nlen = (int)node->token.len;
             if (nlen > 255) nlen = 255;
             snprintf(name, sizeof(name), "%.*s", nlen, node->token.text);
-            Symbol* sym = symtab_lookup_current(symtab, name);
-            if (sym && node->child_count > 2) {
+            Symbol* sym = symtab_lookup(symtab, name);
+            if (sym && node->child_count > 1) {
                 // Has initializer — write
                 trans_sym(sym, STATE_ACTION_WRITE, node->token.loc, errors);
             }

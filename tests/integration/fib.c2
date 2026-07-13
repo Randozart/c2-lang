@@ -1,0 +1,16 @@
+// Fibonacci — tests recursion, contracts, integer arithmetic
+[1][result == 0]
+int32_t main(void) {
+    // Print the first 10 Fibonacci numbers
+    int32_t a = 0;
+    int32_t b = 1;
+    int32_t i = 0;
+    while (i < 10) {
+        int32_t next = a + b;
+        a = b;
+        b = next;
+        i = i + 1;
+    }
+    // After 10 iterations, a = 55 (the 10th Fibonacci number)
+    return a - 55;
+}

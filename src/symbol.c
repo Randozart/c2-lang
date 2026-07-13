@@ -97,21 +97,30 @@ size_t symtab_push_scope(SymbolTable* st) {
 size_t symtab_pop_scope(SymbolTable* st) {
     if (!st || !st->current || !st->current->parent) return 0;
     size_t depth = st->current->depth;
-    // Keep the scope alive (node->symbol may still reference it).
-    // Push onto dead_scopes list for cleanup at symtab_destroy.
-    st->current->parent = st->dead_scopes;
-    st->dead_scopes = st->current;
-    st->current = st->current->parent;
-    // The new current is the parent. The old scope's ->parent was
-    // overwritten to point to the dead_scopes list, but we saved
-    // the true parent in the loop above. Re-point dead scope's
-    // parent to the previous dead list head (already done above).
+    // Move current scope to dead list (kept alive for node->symbol refs).
+    // The ->parent chain within dead list is NOT used for lookups.
+    Scope* dying = st->current;
+    st->current = dying->parent;
+    dying->parent = st->dead_scopes;
+    st->dead_scopes = dying;
     return depth;
 }
 
 Symbol* symtab_lookup(SymbolTable* st, const char* name) {
     if (!st || !name) return NULL;
+    // Search active scopes
     Scope* s = st->current;
+    while (s) {
+        size_t idx = hash_str(name) % s->bucket_count;
+        Symbol* cur = s->buckets[idx];
+        while (cur) {
+            if (strcmp(cur->name, name) == 0) return cur;
+            cur = cur->next;
+        }
+        s = s->parent;
+    }
+    // Also search dead scopes (popped but symbols kept alive for refs)
+    s = st->dead_scopes;
     while (s) {
         size_t idx = hash_str(name) % s->bucket_count;
         Symbol* cur = s->buckets[idx];
