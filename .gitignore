@@ -16,6 +16,7 @@ Thumbs.db
 
 # IDE
 .vscode/
+!.vscode/c2-highlight/
 .idea/
 *.suo
 *.user

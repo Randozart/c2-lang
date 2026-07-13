@@ -1,0 +1,4 @@
+no_derive
+int main() {
+    return 0;
+}

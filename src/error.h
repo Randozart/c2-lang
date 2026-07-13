@@ -6,7 +6,7 @@
 #define C2_ERROR_H
 
 #include <stddef.h>
-#include "ast.h"
+#include "lexer.h"
 
 // ── Error levels ────────────────────────────────────────────────────────
 
@@ -29,7 +29,7 @@ typedef struct {
 
 // ── Error list ──────────────────────────────────────────────────────────
 
-typedef struct {
+typedef struct ErrorList {
     ErrorMessage* items;
     size_t        count;
     size_t        capacity;

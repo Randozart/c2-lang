@@ -7,11 +7,11 @@
 
 #include <stddef.h>
 #include <stdint.h>
+#include "lexer.h"
 
 // ── Forward declarations ────────────────────────────────────────────────
 
 typedef struct AstNode AstNode;
-typedef struct Token Token;
 typedef struct Symbol Symbol;
 typedef struct Type Type;
 
@@ -63,6 +63,9 @@ typedef enum {
     NODE_STATIC_ASSERT,
     NODE_TRANSLATION_UNIT,
     NODE_DROP_CALL,          // Injected by drop pass (not in source)
+    NODE_PP_INCLUDE,         // Preprocessor #include
+    NODE_PP_DEFINE,          // Preprocessor #define
+    NODE_PP_DIRECTIVE,       // Any other preprocessor directive
 } NodeKind;
 
 // ── Value range (VRP result) ────────────────────────────────────────────
@@ -72,29 +75,6 @@ typedef struct {
     int64_t hi;
     int     has_range;  // 0 = no inferred range
 } ValueRange;
-
-// ── Source location ─────────────────────────────────────────────────────
-
-typedef struct {
-    const char* filename;
-    size_t      line;
-    size_t      col;
-    size_t      offset;  // Byte offset from start of file
-} SourceLoc;
-
-// ── Token (produced by lexer, stored in AST for error reporting) ────────
-
-typedef struct {
-    int         kind;
-    SourceLoc   loc;
-    const char* text;
-    size_t      len;
-    union {
-        int64_t  i64;
-        double   f64;
-        char*    str;
-    } value;
-} Token;
 
 // ── AST node ────────────────────────────────────────────────────────────
 
@@ -133,9 +113,5 @@ typedef int (*AstVisitor)(AstNode* node, void* user_data);
 
 int ast_walk_preorder(AstNode* root, AstVisitor visitor, void* user_data);
 int ast_walk_postorder(AstNode* root, AstVisitor visitor, void* user_data);
-
-// ── Debug ───────────────────────────────────────────────────────────────
-
-void ast_dump(AstNode* root, int indent);
 
 #endif // C2_AST_H

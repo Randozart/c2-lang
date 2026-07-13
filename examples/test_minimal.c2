@@ -1,0 +1,5 @@
+[[result >= 0]
+int32_t abs_value(int32_t x) {
+    when x < 0 -> return -x;
+    return x;
+}

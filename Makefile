@@ -11,7 +11,10 @@
 SHELL := /bin/bash
 CC    := gcc
 CFLAGS := -std=c23 -Wall -Wextra -Wpedantic -Werror -g -O0
-LDFLAGS := -lz3
+# Z3 is optional for Phase A (verification pass linked in Phase C)
+# Try to detect Z3; if not found, link without it.
+Z3_LDFLAGS := $(shell pkg-config --libs z3 2>/dev/null || echo "")
+LDFLAGS := $(Z3_LDFLAGS)
 
 SRC_DIR := src
 BUILD_DIR := build

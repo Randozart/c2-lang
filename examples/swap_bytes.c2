@@ -27,6 +27,7 @@ void set_index(int32_t x) {
 }
 
 // ── Derivation block: compile-time assertion ────────────────────────────
+// Derivation examples serve as the specification, so no separate contract needed.
 int32_t swap_bytes(uint16_t val) {
     return (val << 8) | (val >> 8);
 } := {
@@ -35,7 +36,8 @@ int32_t swap_bytes(uint16_t val) {
     0x0000 -> 0x0000;
 };
 
-// ── Main with all features ──────────────────────────────────────────────
+// ── Main with postcondition ─────────────────────────────────────────────
+[[result == 0]
 int32_t main(void) {
     printf("divide(10, 3) = %d\n", divide(10, 3));
     printf("abs_value(-5) = %d\n", abs_value(-5));
