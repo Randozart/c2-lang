@@ -266,12 +266,7 @@ generic_decl:
         // Check for derivation block := { ... }
         if (match(p, TOK_DERIVE)) {
             AstNode* deriv = parse_derivation_block(p);
-            // Optional body after derivation: sig := { ... } { body }
-            AstNode* body = NULL;
-            if (match(p, TOK_LBRACE)) {
-                body = parse_block(p);
-            }
-            AstNode* func = ast_make_function(name_tok, type, params, body, pre, post, deriv);
+            AstNode* func = ast_make_function(name_tok, type, params, NULL, pre, post, deriv);
             if (has_no_derive) {
                 AstNode* nd = ast_alloc_node(NODE_NO_DERIVE, name_tok);
                 ast_add_child(func, nd);

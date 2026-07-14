@@ -288,10 +288,12 @@ static void test_tc_contracts(void) {
 static void test_tc_derivation(void) {
     TEST("valid derivation example count");
     ErrorList* err = errlist_create();
-    const char* src = "int32_t add(int32_t a, int32_t b) := {\n"
+    const char* src = "int32_t add(int32_t a, int32_t b) {\n"
+                      "    return a + b;\n"
+                      "} := {\n"
                       "    1, 2 -> 3;\n"
                       "    10, 20 -> 30;\n"
-                      "} { return a + b; }\n";
+                      "};\n";
     const char* out = transpile(src, err);
     assert(out != NULL);
     errlist_destroy(err);
@@ -299,9 +301,11 @@ static void test_tc_derivation(void) {
 
     TEST("derivation example count mismatch");
     ErrorList* err2 = errlist_create();
-    const char* src2 = "int32_t add(int32_t a, int32_t b) := {\n"
+    const char* src2 = "int32_t add(int32_t a, int32_t b) {\n"
+                       "    return a + b;\n"
+                       "} := {\n"
                        "    1 -> 1;\n"
-                       "} { return a + b; }\n";
+                       "};\n";
     const char* out2 = transpile(src2, err2);
     assert(out2 == NULL);
     assert(err2->has_errors);
