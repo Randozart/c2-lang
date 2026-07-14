@@ -913,7 +913,8 @@ static void emit_node(Codegen* cg, AstNode* node) {
         }
 
         default:
-            // Unknown node — skip silently
+            emit_indent(cg);
+            cg_printf(cg, "/* unknown node kind %d */\n", node->kind);
             break;
     }
 }
