@@ -824,19 +824,20 @@ static void tc_node(AstNode* node, TCContext* ctx) {
                 if (plen > 255) plen = 255;
                 snprintf(pname, sizeof(pname), "%.*s", plen, param->token.text);
 
-                if (param->flags & 1) {
-                    if (!type_is_pointer(ptype)) {
-                        errlist_add(ctx->errors, ERROR_LEVEL_ERROR, param->token.loc,
-                                    "'borrow' modifier on non-pointer type");
-                        ctx->has_type_error = 1;
-                    }
+                int is_borrow = 0, is_own = 0;
+                for (size_t ci = 1; ci < param->child_count; ci++) {
+                    if (param->children[ci]->kind == NODE_BORROW_PARAM) is_borrow = 1;
+                    if (param->children[ci]->kind == NODE_OWN_PARAM) is_own = 1;
                 }
-                if (param->flags & 2) {
-                    if (!type_is_pointer(ptype)) {
-                        errlist_add(ctx->errors, ERROR_LEVEL_ERROR, param->token.loc,
-                                    "'own' modifier on non-pointer type");
-                        ctx->has_type_error = 1;
-                    }
+                if (is_borrow && !type_is_pointer(ptype)) {
+                    errlist_add(ctx->errors, ERROR_LEVEL_ERROR, param->token.loc,
+                                "'borrow' modifier on non-pointer type");
+                    ctx->has_type_error = 1;
+                }
+                if (is_own && !type_is_pointer(ptype)) {
+                    errlist_add(ctx->errors, ERROR_LEVEL_ERROR, param->token.loc,
+                                "'own' modifier on non-pointer type");
+                    ctx->has_type_error = 1;
                 }
 
                 Symbol* psym = symtab_insert(ctx->symtab, pname, ptype, param->token.loc);
