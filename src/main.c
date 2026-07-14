@@ -1,3 +1,5 @@
+// 2026-07-14 — Moved symtab_destroy after codegen to keep
+//   NODE_DROP_CALL symbol name pointers valid during codegen.
 // 2026-07-13 — C² compiler CLI entry point.
 //   Parses command-line flags, runs the lexer→parser→codegen pipeline,
 //   and dispatches to the system C compiler in driver mode.
@@ -101,12 +103,13 @@ int main(int argc, char** argv) {
         // Drop injection (mutates AST — inserts NODE_DROP_CALL)
         drop_inject(ast, symtab, errors);
 
-        symtab_destroy(symtab);
-
-        // Codegen
+        // Codegen (must run before symtab_destroy — NODE_DROP_CALL nodes
+        // store a pointer to the symbol name which is freed on symtab destruction)
         Codegen cg;
         codegen_init(&cg, errors);
         codegen_generate(&cg, ast);
+
+        symtab_destroy(symtab);
 
         if (errors->has_errors) {
             errlist_print(errors);

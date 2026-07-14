@@ -1,3 +1,5 @@
+// 2026-07-14 — Fixed symtab_lookup_current → symtab_lookup for
+//   dead scope search. Only emit drop calls for pointer types.
 // 2026-07-13 — Drop injection pass implementation.
 //   Inserts NODE_DROP_CALL nodes at block scope boundaries for
 //   owned variables. Skips variables already transitioned to
@@ -5,6 +7,7 @@
 
 #include "drop.h"
 #include "state.h"
+#include "type.h"
 #include <string.h>
 #include <stdio.h>
 #include <stdlib.h>
@@ -76,14 +79,12 @@ static void drop_walk(AstNode* node, SymbolTable* symtab, OwnedList* owned,
     switch (node->kind) {
 
     case NODE_DECL: {
-        // Variable declared — if it's a parameter with `own`, it starts OWNED
         char name[256];
         int nlen = (int)node->token.len;
         if (nlen > 255) nlen = 255;
         snprintf(name, sizeof(name), "%.*s", nlen, node->token.text);
-        Symbol* sym = symtab_lookup_current(symtab, name);
+        Symbol* sym = symtab_lookup(symtab, name);
         if (sym && var_is_owned(sym)) {
-            // Check if already tracked
             int found = 0;
             for (size_t i = 0; i < owned->count; i++) {
                 if (owned->syms[i] == sym) { found = 1; break; }
@@ -110,11 +111,14 @@ static void drop_walk(AstNode* node, SymbolTable* symtab, OwnedList* owned,
                 owned_push(&func_owned, owned->syms[i]);
             }
             drop_walk(body, symtab, &func_owned, errors);
-            // At function exit, add drop calls for still-owned variables
+            // At function exit, add drop calls for still-owned pointer variables
             for (size_t i = 0; i < func_owned.count; i++) {
-                if (var_is_owned(func_owned.syms[i])) {
-                    AstNode* dc = make_drop_call(func_owned.syms[i], node->token.loc);
-                    ast_add_child(node, dc);
+                Symbol* fsym = func_owned.syms[i];
+                if (var_is_owned(fsym)) {
+                    if (fsym->type && type_is_pointer(fsym->type)) {
+                        AstNode* dc = make_drop_call(fsym, node->token.loc);
+                        ast_add_child(node, dc);
+                    }
                 }
             }
             owned_free(&func_owned);
@@ -125,20 +129,20 @@ static void drop_walk(AstNode* node, SymbolTable* symtab, OwnedList* owned,
     case NODE_BLOCK: {
         OwnedList block_owned;
         owned_init(&block_owned);
-        // Save starting owned count
         size_t start_count = owned->count;
 
-        // Walk children
         for (size_t i = 0; i < node->child_count; i++) {
             drop_walk(node->children[i], symtab, owned, errors);
         }
 
-        // At block exit, add drop calls for variables that became owned
-        // during this block and are still owned
         for (size_t i = start_count; i < owned->count; i++) {
-            if (var_is_owned(owned->syms[i])) {
-                AstNode* dc = make_drop_call(owned->syms[i], node->token.loc);
-                ast_add_child(node, dc);
+            Symbol* sym = owned->syms[i];
+            if (var_is_owned(sym)) {
+                // Only inject drop for pointer types (primitives live on stack)
+                if (sym->type && type_is_pointer(sym->type)) {
+                    AstNode* dc = make_drop_call(sym, node->token.loc);
+                    ast_add_child(node, dc);
+                }
             }
         }
 
@@ -147,7 +151,6 @@ static void drop_walk(AstNode* node, SymbolTable* symtab, OwnedList* owned,
     }
 
     case NODE_ASSIGN: {
-        // If destination is a local variable, track its state
         if (node->child_count >= 2 && node->children[0]->kind == NODE_VARIABLE) {
             Symbol* sym = node->children[0]->symbol;
             if (sym && var_is_owned(sym)) {

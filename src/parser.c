@@ -1,3 +1,6 @@
+// 2026-07-14 — Added cast expression parsing (NODE_CAST) with
+//   parser checkpoint/restore for backtracking.
+//   Supports: (type)expr for primitive type keywords and identifiers.
 // 2026-07-13 — Recursive-descent parser for C².
 //   Builds an AST from the token stream produced by the lexer.
 //   Supports C23 syntax plus C² extensions: contracts, guards,
@@ -8,6 +11,42 @@
 #include <string.h>
 #include <stdlib.h>
 #include <stdio.h>
+
+// ── Lexer checkpoint — for speculative parsing ─────────────────────────
+// Used when we need to peek ahead and possibly backtrack
+// (e.g., distinguishing cast expressions from parenthesized expressions).
+
+typedef struct {
+    const char* current;
+    size_t      line;
+    size_t      col;
+    size_t      offset;
+    Token       current_tok;
+    Token       prev;
+    int         has_prev;
+} ParseCheckpoint;
+
+static ParseCheckpoint parser_save(Parser* p) {
+    ParseCheckpoint cp;
+    cp.current     = p->lexer.current;
+    cp.line        = p->lexer.line;
+    cp.col         = p->lexer.col;
+    cp.offset      = p->lexer.offset;
+    cp.current_tok = p->lexer.current_tok;
+    cp.prev        = p->lexer.prev;
+    cp.has_prev    = p->lexer.has_prev;
+    return cp;
+}
+
+static void parser_restore(Parser* p, ParseCheckpoint cp) {
+    p->lexer.current     = cp.current;
+    p->lexer.line        = cp.line;
+    p->lexer.col         = cp.col;
+    p->lexer.offset      = cp.offset;
+    p->lexer.current_tok = cp.current_tok;
+    p->lexer.prev        = cp.prev;
+    p->lexer.has_prev    = cp.has_prev;
+}
 
 // ── Forward declarations ────────────────────────────────────────────────
 
@@ -1163,6 +1202,27 @@ static AstNode* parse_postfix(Parser* p) {
 
 static AstNode* parse_primary(Parser* p) {
     if (match(p, TOK_LPAREN)) {
+        // Try to detect a cast expression: (type)unary_expr
+        // Use current_tok directly (not peek()) to check the first token inside parens.
+        TokenKind inner = p->lexer.current_tok.kind;
+        if (is_type_token(inner) || inner == TOK_IDENTIFIER) {
+            ParseCheckpoint cp = parser_save(p);
+            AstNode* type_node = parse_type(p);
+            if (type_node && match(p, TOK_RPAREN)) {
+                AstNode* expr = parse_unary(p);
+                if (expr) {
+                    AstNode* cast = ast_alloc_node(NODE_CAST, type_node->token);
+                    ast_add_child(cast, type_node);
+                    ast_add_child(cast, expr);
+                    return cast;
+                }
+            }
+            // Failed to parse as cast — restore and fall through to
+            // parenthesized expression parsing below.
+            parser_restore(p, cp);
+        }
+
+        // Parenthesized expression
         AstNode* expr = parse_expr(p);
         expect(p, TOK_RPAREN);
         return expr;
