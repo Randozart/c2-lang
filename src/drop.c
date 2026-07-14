@@ -117,7 +117,7 @@ static void drop_walk(AstNode* node, SymbolTable* symtab, OwnedList* owned,
                 if (var_is_owned(fsym)) {
                     if (fsym->type && type_is_pointer(fsym->type)) {
                         AstNode* dc = make_drop_call(fsym, node->token.loc);
-                        ast_add_child(node, dc);
+                        ast_add_child(body, dc);
                     }
                 }
             }
