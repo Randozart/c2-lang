@@ -378,7 +378,7 @@ static void tc_node(AstNode* node, TCContext* ctx) {
 
     // ── Declaration ───────────────────────────────────────────────────
     case NODE_DECL: {
-        // Children: [0]=type_node, [1]=name, [2+]=init/array_size
+        // Children: [0]=type_node, [1+]=array_sub/init
         if (node->child_count < 2) break;
 
         // Parse the type from the type node
@@ -388,7 +388,7 @@ static void tc_node(AstNode* node, TCContext* ctx) {
 
         // Find array subscript (NODE_ARRAY_SUB) among children
         size_t array_size = 0;
-        for (size_t i = 2; i < node->child_count; i++) {
+        for (size_t i = 1; i < node->child_count; i++) {
             if (node->children[i]->kind == NODE_ARRAY_SUB &&
                 node->children[i]->child_count > 0) {
                 AstNode* size_node = node->children[i]->children[0];
