@@ -1,5 +1,14 @@
 # C² (Contract Enforced C, Squared with Brackets)
 
+<p align="center">
+  <img src="assets/c2-logo.svg" alt="C² Logo" width="200"/>
+</p>
+
+<p align="center">
+  <em>Meet <strong>Cobb</strong>, the C² mascot</em><br>
+  <img src="assets/cobb.svg" alt="C² Mascot: Cobb" width="120"/>
+</p>
+
 **Compile-time verified contracts, automatic memory management, and program synthesis for C.**
 
 C² is a C-to-C semantic transpiler (the `c2c` compiler) that extends standard C23
