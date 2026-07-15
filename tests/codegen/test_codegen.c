@@ -339,6 +339,74 @@ static void test_emit_global_var(void) {
     PASS();
 }
 
+static void test_emit_extern(void) {
+    TEST("emit extern function declaration");
+    ErrorList* err = errlist_create();
+    const char* src = "[1][1]\nextern int32_t printf(int32_t x);\n";
+    const char* out = transpile(src, err);
+    assert(out != NULL);
+    assert(strstr(out, "extern int32_t printf") != NULL);
+    errlist_destroy(err);
+    PASS();
+
+    TEST("emit extern variable declaration");
+    ErrorList* err2 = errlist_create();
+    const char* src2 = "extern int32_t errno;\n";
+    const char* out2 = transpile(src2, err2);
+    assert(out2 != NULL);
+    assert(strstr(out2, "extern int32_t errno") != NULL);
+    errlist_destroy(err2);
+    PASS();
+
+    TEST("emit extern with body (ignores extern)");
+    ErrorList* err3 = errlist_create();
+    const char* src3 = "[1][1]\nextern int32_t foo() { return 0; }\n";
+    const char* out3 = transpile(src3, err3);
+    assert(out3 != NULL);
+    // Should NOT contain "extern" since it has a body
+    assert(strstr(out3, "extern") == NULL);
+    errlist_destroy(err3);
+    PASS();
+}
+
+static void test_emit_static_const(void) {
+    TEST("emit static function");
+    ErrorList* err = errlist_create();
+    const char* src = "[1][1]\nstatic int32_t helper(int32_t x) { return x; }\n";
+    const char* out = transpile(src, err);
+    assert(out != NULL);
+    assert(strstr(out, "static int32_t helper") != NULL);
+    errlist_destroy(err);
+    PASS();
+
+    TEST("emit static variable");
+    ErrorList* err2 = errlist_create();
+    const char* src2 = "static int32_t counter = 0;\n";
+    const char* out2 = transpile(src2, err2);
+    assert(out2 != NULL);
+    assert(strstr(out2, "static int32_t counter = 0") != NULL);
+    errlist_destroy(err2);
+    PASS();
+
+    TEST("emit const parameter");
+    ErrorList* err3 = errlist_create();
+    const char* src3 = "[1][1]\nint32_t get_value(const int32_t x) { return x; }\n";
+    const char* out3 = transpile(src3, err3);
+    assert(out3 != NULL);
+    assert(strstr(out3, "const int32_t x") != NULL);
+    errlist_destroy(err3);
+    PASS();
+
+    TEST("emit const variable");
+    ErrorList* err4 = errlist_create();
+    const char* src4 = "const int32_t LIMIT = 100;\n";
+    const char* out4 = transpile(src4, err4);
+    assert(out4 != NULL);
+    assert(strstr(out4, "const int32_t LIMIT = 100") != NULL);
+    errlist_destroy(err4);
+    PASS();
+}
+
 int main(void) {
     printf("\nC² Codegen Unit Tests\n");
     printf("=====================\n\n");
@@ -360,6 +428,8 @@ int main(void) {
     test_emit_switch();
     test_emit_do_while();
     test_emit_global_var();
+    test_emit_extern();
+    test_emit_static_const();
 
     printf("\n%d/%d tests passed\n", tests_passed, tests_run);
     return tests_passed == tests_run ? 0 : 1;

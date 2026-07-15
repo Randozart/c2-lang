@@ -102,7 +102,11 @@ static void emit_node(Codegen* cg, AstNode* node) {
 
             // Return type (first child, always present)
             if (node->child_count > 0) {
-                emit_node(cg, node->children[0]);
+                AstNode* rt = node->children[0];
+                // Emit static/const qualifiers from return type node flags
+                if (rt->flags & NODE_FLAG_STATIC) cg_puts(cg, "static ");
+                if (rt->flags & NODE_FLAG_CONST) cg_puts(cg, "const ");
+                emit_node(cg, rt);
                 cg_putc(cg, ' ');
             }
 
@@ -122,17 +126,20 @@ static void emit_node(Codegen* cg, AstNode* node) {
             cg_puts(cg, ")");
 
             // Body
+            int has_body = 0;
             for (size_t i = 0; i < node->child_count; i++) {
                 if (node->children[i]->kind == NODE_BLOCK) {
                     cg_putc(cg, ' ');
                     emit_node(cg, node->children[i]);
+                    has_body = 1;
                     break;
                 }
             }
 
-            // Derivation block after body (emitted as comment already done above)
-            // Now emit the derivation block comment again if present
-            cg_putc(cg, '\n');
+            // Only emit trailing newline for functions with a body
+            if (has_body) {
+                cg_putc(cg, '\n');
+            }
             break;
         }
 
@@ -154,6 +161,9 @@ static void emit_node(Codegen* cg, AstNode* node) {
 
             if (node->child_count > 0) {
                 AstNode* type_node = node->children[0];
+                // Emit static/const qualifiers from type node flags
+                if (type_node->flags & NODE_FLAG_STATIC) cg_puts(cg, "static ");
+                if (type_node->flags & NODE_FLAG_CONST) cg_puts(cg, "const ");
                 // Inline struct/union/enum definition: emit body without trailing ;
                 if (type_node->kind == NODE_STRUCT_DECL ||
                     type_node->kind == NODE_UNION_DECL ||
@@ -890,6 +900,14 @@ static void emit_node(Codegen* cg, AstNode* node) {
                 cg_putc(cg, ')');
                 emit_node(cg, node->children[1]);
             }
+            break;
+        }
+
+        case NODE_EXTERN: {
+            emit_indent(cg);
+            cg_puts(cg, "extern ");
+            if (node->child_count > 0) emit_node(cg, node->children[0]);
+            cg_puts(cg, ";\n");
             break;
         }
 

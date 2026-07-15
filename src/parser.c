@@ -241,6 +241,13 @@ generic_decl:
         (void)contract_node;
     }
 
+    // Check for extern keyword (must be handled before parse_type since
+    // parse_type would otherwise consume and discard it as a type qualifier).
+    int is_extern = 0;
+    if (match(p, TOK_EXTERN)) {
+        is_extern = 1;
+    }
+
     // Parse a type (simplified)
     AstNode* type = parse_type(p);
     if (!type) {
@@ -271,31 +278,48 @@ generic_decl:
                 AstNode* nd = ast_alloc_node(NODE_NO_DERIVE, name_tok);
                 ast_add_child(func, nd);
             }
+            if (is_extern) {
+                AstNode* ext = ast_alloc_node(NODE_EXTERN, name_tok);
+                ast_add_child(ext, func);
+                return ext;
+            }
             return func;
         }
 
-        // Otherwise, parse body
-        expect(p, TOK_LBRACE);
-        AstNode* body = parse_block(p);
+        // Check for function body
+        if (check(p, TOK_LBRACE)) {
+            consume(p);
+            AstNode* body = parse_block(p);
 
-        // Check for optional derivation block after body
-        AstNode* deriv = NULL;
-        if (match(p, TOK_DERIVE)) {
-            deriv = parse_derivation_block(p);
+            // Check for optional derivation block after body
+            AstNode* deriv = NULL;
+            if (match(p, TOK_DERIVE)) {
+                deriv = parse_derivation_block(p);
+            }
+
+            // Enforce contracts: every function must have at least a pre, post,
+            // or derivation block (unless marked no_derive).
+            if (pre == NULL && post == NULL && deriv == NULL && !has_no_derive) {
+                errlist_add(p->errors, ERROR_LEVEL_ERROR, name_tok.loc,
+                            "function '%.*s' has no contract — declare [pre][post], [[post]], or [pre]]",
+                            (int)name_tok.len, name_tok.text);
+            }
+
+            AstNode* func = ast_make_function(name_tok, type, params, body, pre, post, deriv);
+            if (has_no_derive) {
+                AstNode* nd = ast_alloc_node(NODE_NO_DERIVE, name_tok);
+                ast_add_child(func, nd);
+            }
+            return func;
         }
 
-        // Enforce contracts: every function must have at least a pre, post,
-        // or derivation block (unless marked no_derive).
-        if (pre == NULL && post == NULL && deriv == NULL && !has_no_derive) {
-            errlist_add(p->errors, ERROR_LEVEL_ERROR, name_tok.loc,
-                        "function '%.*s' has no contract — declare [pre][post], [[post]], or [pre]]",
-                        (int)name_tok.len, name_tok.text);
-        }
-
-        AstNode* func = ast_make_function(name_tok, type, params, body, pre, post, deriv);
-        if (has_no_derive) {
-            AstNode* nd = ast_alloc_node(NODE_NO_DERIVE, name_tok);
-            ast_add_child(func, nd);
+        // No body — function declaration (forward declaration or extern)
+        expect(p, TOK_SEMI);
+        AstNode* func = ast_make_function(name_tok, type, params, NULL, pre, post, NULL);
+        if (is_extern) {
+            AstNode* ext = ast_alloc_node(NODE_EXTERN, name_tok);
+            ast_add_child(ext, func);
+            return ext;
         }
         return func;
     }
@@ -318,6 +342,12 @@ generic_decl:
     }
 
     expect(p, TOK_SEMI);
+
+    if (is_extern) {
+        AstNode* ext = ast_alloc_node(NODE_EXTERN, name_tok);
+        ast_add_child(ext, decl);
+        return ext;
+    }
 
     AstNode* stmt = ast_alloc_node(NODE_EXPR_STMT, decl->token);
     ast_add_child(stmt, decl);
@@ -1276,9 +1306,25 @@ static int is_type_token(TokenKind kind) {
         case TOK_BOOL: case TOK_COMPLEX: case TOK_IMAGINARY:
         case TOK_STRUCT: case TOK_UNION: case TOK_ENUM:
         case TOK_CONST: case TOK_VOLATILE: case TOK_RESTRICT:
-        case TOK_EXTERN: case TOK_STATIC: case TOK_INLINE:
+        case TOK_STATIC: case TOK_INLINE:
         case TOK_TYPEDEF: case TOK_NORETURN: case TOK_ATOMIC:
         case TOK_AUTO: case TOK_REGISTER:
+            return 1;
+        default:
+            return 0;
+    }
+}
+
+/// Returns 1 if `kind` is a "real" type specifier (not a qualifier or
+/// storage-class specifier). Used to distinguish `int`, `void`, `struct`
+/// from `const`, `static`, `inline` etc.
+static int is_real_type_spec(TokenKind kind) {
+    switch (kind) {
+        case TOK_VOID: case TOK_CHAR: case TOK_SHORT: case TOK_INT:
+        case TOK_LONG: case TOK_FLOAT: case TOK_DOUBLE:
+        case TOK_SIGNED: case TOK_UNSIGNED:
+        case TOK_BOOL: case TOK_COMPLEX: case TOK_IMAGINARY:
+        case TOK_STRUCT: case TOK_UNION: case TOK_ENUM:
             return 1;
         default:
             return 0;
@@ -1291,11 +1337,17 @@ static AstNode* parse_type(Parser* p) {
     }
 
     int consumed_type_keyword = 0;
+    int consumed_real_type = 0;
     Token type_tok;
     int has_type_tok = 0;
     int is_struct_union_enum = 0;
+    int has_static = 0;
+    int has_const = 0;
     while (is_type_token(p->lexer.current_tok.kind)) {
         type_tok = consume(p);
+        if (is_real_type_spec(type_tok.kind)) consumed_real_type = 1;
+        if (type_tok.kind == TOK_STATIC) has_static = 1;
+        if (type_tok.kind == TOK_CONST) has_const = 1;
         consumed_type_keyword = 1;
         has_type_tok = 1;
 
@@ -1311,6 +1363,8 @@ static AstNode* parse_type(Parser* p) {
         AstNode* node = ast_alloc_node(NODE_VARIABLE, type_tok);
         AstNode* tag_node = ast_alloc_node(NODE_VARIABLE, tag_tok);
         ast_add_child(node, tag_node);
+        if (has_static) node->flags |= NODE_FLAG_STATIC;
+        if (has_const) node->flags |= NODE_FLAG_CONST;
         has_type_tok = 1;
         consumed_type_keyword = 1;
 
@@ -1332,6 +1386,11 @@ static AstNode* parse_type(Parser* p) {
     if (!consumed_type_keyword && check(p, TOK_IDENTIFIER)) {
         type_tok = consume(p);
         has_type_tok = 1;
+    } else if (consumed_type_keyword && !consumed_real_type && check(p, TOK_IDENTIFIER)) {
+        // Only qualifiers were consumed (static/const/etc.) — consume the
+        // identifier as the actual type name.
+        type_tok = consume(p);
+        has_type_tok = 1;
     }
 
     while (match(p, TOK_STAR)) {
@@ -1340,6 +1399,8 @@ static AstNode* parse_type(Parser* p) {
 
     if (!has_type_tok) return NULL;
     AstNode* node = ast_alloc_node(NODE_VARIABLE, type_tok);
+    if (has_static) node->flags |= NODE_FLAG_STATIC;
+    if (has_const) node->flags |= NODE_FLAG_CONST;
     if (pointer_depth > 0) {
         Token star_tok = { .kind = TOK_STAR, .loc = type_tok.loc };
         AstNode* ptr_marker = ast_alloc_node(NODE_VARIABLE, star_tok);

@@ -99,6 +99,11 @@ struct AstNode {
     int         flags;      // Misc flags (e.g., is_lvalue, is_const)
 };
 
+// ── Node flags ─────────────────────────────────────────────────────────
+
+#define NODE_FLAG_STATIC 1
+#define NODE_FLAG_CONST  2
+
 // ── AST construction functions ──────────────────────────────────────────
 
 AstNode* ast_alloc_node(NodeKind kind, Token token);

@@ -286,6 +286,109 @@ static void test_no_derive(void) {
     PASS();
 }
 
+static void test_extern_function(void) {
+    TEST("parse extern function declaration");
+    ErrorList* err = errlist_create();
+    const char* src = "[1][1]\n"
+                      "extern int32_t printf(int32_t x);\n";
+    AstNode* root = parse_source(src, err);
+    assert(root != NULL && root->child_count == 1);
+    assert(root->children[0]->kind == NODE_EXTERN);
+    assert(root->children[0]->child_count == 1);
+    assert(root->children[0]->children[0]->kind == NODE_FUNCTION);
+    ast_free_tree(root);
+    errlist_destroy(err);
+    PASS();
+}
+
+static void test_extern_variable(void) {
+    TEST("parse extern variable declaration");
+    ErrorList* err = errlist_create();
+    const char* src = "extern int32_t errno;\n";
+    AstNode* root = parse_source(src, err);
+    assert(root != NULL && root->child_count == 1);
+    assert(root->children[0]->kind == NODE_EXTERN);
+    assert(root->children[0]->child_count == 1);
+    assert(root->children[0]->children[0]->kind == NODE_DECL);
+    ast_free_tree(root);
+    errlist_destroy(err);
+    PASS();
+}
+
+static void test_extern_func_with_body(void) {
+    TEST("parse extern with body (ignores extern)");
+    ErrorList* err = errlist_create();
+    const char* src = "[1][1]\n"
+                      "extern int32_t foo() { return 0; }\n";
+    AstNode* root = parse_source(src, err);
+    assert(root != NULL && root->child_count == 1);
+    // extern with body should be treated as a regular function
+    assert(root->children[0]->kind == NODE_FUNCTION);
+    ast_free_tree(root);
+    errlist_destroy(err);
+    PASS();
+}
+
+static void test_static_function(void) {
+    TEST("parse static function");
+    ErrorList* err = errlist_create();
+    const char* src = "[1][1]\n"
+                      "static int32_t helper(int32_t x) { return x; }\n";
+    AstNode* root = parse_source(src, err);
+    assert(root != NULL && root->child_count == 1);
+    assert(root->children[0]->kind == NODE_FUNCTION);
+    assert(root->children[0]->children[0]->kind == NODE_VARIABLE);
+    // Return type node should have NODE_FLAG_STATIC set
+    assert(root->children[0]->children[0]->flags & NODE_FLAG_STATIC);
+    ast_free_tree(root);
+    errlist_destroy(err);
+    PASS();
+}
+
+static void test_static_var(void) {
+    TEST("parse static variable");
+    ErrorList* err = errlist_create();
+    const char* src = "static int32_t counter = 0;\n";
+    AstNode* root = parse_source(src, err);
+    assert(root != NULL && root->child_count == 1);
+    // Global variable decls are wrapped in NODE_EXPR_STMT
+    assert(root->children[0]->kind == NODE_EXPR_STMT);
+    assert(root->children[0]->child_count == 1);
+    AstNode* decl = root->children[0]->children[0];
+    assert(decl->kind == NODE_DECL);
+    assert(decl->children[0]->kind == NODE_VARIABLE);
+    // Type node should have NODE_FLAG_STATIC set
+    assert(decl->children[0]->flags & NODE_FLAG_STATIC);
+    ast_free_tree(root);
+    errlist_destroy(err);
+    PASS();
+}
+
+static void test_const_param(void) {
+    TEST("parse const parameter");
+    ErrorList* err = errlist_create();
+    const char* src = "[1][1]\n"
+                      "int32_t get_value(const int32_t x) { return x; }\n";
+    AstNode* root = parse_source(src, err);
+    assert(root != NULL && root->child_count == 1);
+    assert(root->children[0]->kind == NODE_FUNCTION);
+    // Find the parameter NODE_DECL
+    AstNode* params = NULL;
+    for (size_t i = 0; i < root->children[0]->child_count; i++) {
+        if (root->children[0]->children[i]->kind == NODE_PARAM_LIST) {
+            params = root->children[0]->children[i];
+            break;
+        }
+    }
+    assert(params != NULL && params->child_count == 1);
+    AstNode* param_decl = params->children[0];
+    assert(param_decl->kind == NODE_DECL);
+    assert(param_decl->children[0]->flags & NODE_FLAG_CONST);
+    ast_free_tree(root);
+    errlist_destroy(err);
+    PASS();
+}
+
 static void test_expressions(void) {
     TEST("parse complex expression");
     ErrorList* err = errlist_create();
@@ -572,6 +675,12 @@ int main(void) {
     test_derivation_block();
     test_derivation_tolerance();
     test_no_derive();
+    test_extern_function();
+    test_extern_variable();
+    test_extern_func_with_body();
+    test_static_function();
+    test_static_var();
+    test_const_param();
     test_expressions();
     test_pointer_type();
     test_struct_decl();
